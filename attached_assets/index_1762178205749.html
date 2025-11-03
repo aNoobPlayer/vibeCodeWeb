@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>APTIS KEYS – Professional Admin</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="logo">
+      <i class="fa-solid fa-graduation-cap"></i>
+      <span>APTIS KEYS</span>
+      <span class="badge-pro">PRO</span>
+    </div>
+    
+    <div class="search-container">
+      <input id="globalSearch" class="search-input" placeholder="Tìm kiếm toàn hệ thống..." autocomplete="off"/>
+      <i class="fa-solid fa-magnifying-glass search-icon"></i>
+    </div>
+    
+    <div class="topbar-actions">
+      <button class="icon-btn" title="Thông báo">
+        <i class="fa-regular fa-bell"></i>
+        <span class="notification-badge"></span>
+      </button>
+      <button class="icon-btn" title="Cài đặt nhanh">
+        <i class="fa-solid fa-sliders"></i>
+      </button>
+      <div class="user-avatar">
+        <img src="https://i.pravatar.cc/40" alt="Admin Avatar">
+        <span style="font-weight: 500;">Admin</span>
+        <i class="fa-solid fa-chevron-down avatar-caret"></i>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-item active" data-target="dashboard">
+          <i class="fa-solid fa-chart-line"></i>
+          <span>Dashboard</span>
+        </div>
+        <div class="sidebar-item" data-target="sets">
+          <i class="fa-solid fa-layer-group"></i>
+          <span>Bộ đề thi</span>
+          <span class="sidebar-badge" id="badgeSets">0</span>
+        </div>
+        <div class="sidebar-item" data-target="questions">
+          <i class="fa-solid fa-clipboard-question"></i>
+          <span>Ngân hàng câu hỏi</span>
+          <span class="sidebar-badge" id="badgeQs">0</span>
+        </div>
+        <div class="sidebar-item" data-target="tips">
+          <i class="fa-regular fa-lightbulb"></i>
+          <span>Mẹo & Hướng dẫn</span>
+        </div>
+        <div class="sidebar-item" data-target="media">
+          <i class="fa-regular fa-file-audio"></i>
+          <span>Thư viện Media</span>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-title">Quản trị hệ thống</div>
+        <div class="sidebar-item" data-target="users">
+          <i class="fa-solid fa-users"></i>
+          <span>Người dùng</span>
+        </div>
+        <div class="sidebar-item" data-target="reports">
+          <i class="fa-solid fa-chart-pie"></i>
+          <span>Báo cáo & Thống kê</span>
+        </div>
+        <div class="sidebar-item" data-target="settings">
+          <i class="fa-solid fa-gear"></i>
+          <span>Cài đặt</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="content">
+      <!-- DASHBOARD -->
+      <section id="dashboard" class="page">
+        <div class="page-header">
+          <h1 class="page-title">Dashboard</h1>
+          <p class="page-subtitle">Tổng quan hệ thống quản lý đề thi APTIS</p>
+        </div>
+
+        <div class="grid cols-4">
+          <div class="kpi-card">
+            <div class="kpi-label">Tổng số bộ đề</div>
+            <div class="kpi-value" id="kpiSets">0</div>
+            <div class="kpi-sublabel">Đã tạo</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Câu hỏi</div>
+            <div class="kpi-value" id="kpiQs">0</div>
+            <div class="kpi-sublabel">Đang hoạt động</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Mẹo học</div>
+            <div class="kpi-value" id="kpiTips">0</div>
+            <div class="kpi-sublabel">Đã xuất bản</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Media Files</div>
+            <div class="kpi-value" id="kpiMedia">0</div>
+            <div class="kpi-sublabel">Audio & Hình ảnh</div>
+          </div>
+        </div>
+
+        <div class="grid cols-2 mt-6">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Hoạt động gần đây</div>
+                <div class="card-subtitle">Các thay đổi mới nhất</div>
+              </div>
+              <button class="btn secondary" id="btnRefreshActivity" title="Làm mới">
+                <i class="fa-solid fa-rotate"></i>
+              </button>
+            </div>
+            <div id="activityList">
+              <div class="loading">
+                <div class="spinner"></div>
+                <span>Đang tải...</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Phân bố câu hỏi theo kỹ năng</div>
+                <div class="card-subtitle">Thống kê ngân hàng câu hỏi</div>
+              </div>
+            </div>
+            <div class="chart-container" id="skillChart"></div>
+          </div>
+        </div>
+
+        <div class="card mt-6">
+          <div class="card-header">
+            <div class="card-title">Thao tác nhanh</div>
+          </div>
+          <div class="toolbar">
+            <button class="btn primary" onclick="openSetModal()">
+              <i class="fa-solid fa-plus"></i> Tạo bộ đề mới
+            </button>
+            <button class="btn secondary" onclick="openQuestionModal()">
+              <i class="fa-solid fa-clipboard-question"></i> Thêm câu hỏi
+            </button>
+            <button class="btn secondary" onclick="openTipModal()">
+              <i class="fa-solid fa-lightbulb"></i> Viết mẹo học
+            </button>
+            <label class="btn secondary" for="mediaUpload">
+              <i class="fa-solid fa-upload"></i> Upload Media
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- SETS MANAGEMENT -->
+      <section id="sets" class="page hidden">
+        <div class="page-header">
+          <h1 class="page-title">Quản lý Bộ đề</h1>
+          <p class="page-subtitle">Tạo, chỉnh sửa và xuất bản các bộ đề thi</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="toolbar">
+              <button class="btn primary" onclick="openSetModal()">
+                <i class="fa-solid fa-plus"></i> Thêm bộ đề mới
+              </button>
+              <div class="toolbar-group">
+                <select id="filterSetSkill" class="search-filter" onchange="renderSets()">
+                  <option value="">Tất cả kỹ năng</option>
+                  <option>Reading</option>
+                  <option>Listening</option>
+                  <option>Speaking</option>
+                  <option>Writing</option>
+                </select>
+                <select id="filterSetStatus" class="search-filter" onchange="renderSets()">
+                  <option value="">Tất cả trạng thái</option>
+                  <option value="published">Published</option>
+                  <option value="draft">Draft</option>
+                </select>
+                <input id="searchSet" class="search-filter" placeholder="Tìm kiếm bộ đề..." oninput="renderSets()"/>
+              </div>
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th style="width:60px;">#</th>
+                  <th>Tên bộ đề</th>
+                  <th>Kỹ năng</th>
+                  <th>Số câu hỏi</th>
+                  <th>Trạng thái</th>
+                  <th>Cập nhật lần cuối</th>
+                  <th style="width:200px;">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="setRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- QUESTIONS BANK -->
+      <section id="questions" class="page hidden">
+        <div class="page-header">
+          <h1 class="page-title">Ngân hàng câu hỏi</h1>
+          <p class="page-subtitle">Quản lý tất cả câu hỏi theo kỹ năng và loại</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="toolbar">
+              <button class="btn primary" onclick="openQuestionModal()">
+                <i class="fa-solid fa-plus"></i> Thêm câu hỏi mới
+              </button>
+              <div class="toolbar-group">
+                <select id="filterQSkill" class="search-filter" onchange="renderQuestions()">
+                  <option value="">Tất cả kỹ năng</option>
+                  <option>Reading</option>
+                  <option>Listening</option>
+                  <option>Speaking</option>
+                  <option>Writing</option>
+                </select>
+                <select id="filterQType" class="search-filter" onchange="renderQuestions()">
+                  <option value="">Tất cả loại</option>
+                  <option value="mcq_single">MCQ (1 đáp án)</option>
+                  <option value="mcq_multi">MCQ (nhiều đáp án)</option>
+                  <option value="fill_blank">Điền chỗ trống</option>
+                  <option value="writing_prompt">Writing prompt</option>
+                </select>
+                <input id="searchQ" class="search-filter" placeholder="Tìm theo tiêu đề, tags..." oninput="renderQuestions()"/>
+              </div>
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th style="width:60px;">#</th>
+                  <th>Tiêu đề câu hỏi</th>
+                  <th>Kỹ năng</th>
+                  <th>Loại</th>
+                  <th>Điểm số</th>
+                  <th>Tags</th>
+                  <th style="width:220px;">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="qRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TIPS MANAGEMENT -->
+      <section id="tips" class="page hidden">
+        <div class="page-header">
+          <h1 class="page-title">Mẹo học & Hướng dẫn</h1>
+          <p class="page-subtitle">Tạo nội dung hỗ trợ học tập cho học viên</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="toolbar">
+              <button class="btn primary" onclick="openTipModal()">
+                <i class="fa-solid fa-plus"></i> Thêm mẹo mới
+              </button>
+              <div class="toolbar-group">
+                <select id="filterTipSkill" class="search-filter" onchange="renderTips()">
+                  <option value="">Tất cả kỹ năng</option>
+                  <option>Reading</option>
+                  <option>Listening</option>
+                  <option>Speaking</option>
+                  <option>Writing</option>
+                </select>
+                <input id="searchTip" class="search-filter" placeholder="Tìm kiếm mẹo..." oninput="renderTips()"/>
+              </div>
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th style="width:60px;">#</th>
+                  <th>Tiêu đề</th>
+                  <th>Kỹ năng áp dụng</th>
+                  <th>Trạng thái</th>
+                  <th>Ngày tạo</th>
+                  <th style="width:180px;">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="tipRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- MEDIA LIBRARY -->
+      <section id="media" class="page hidden">
+        <div class="page-header">
+          <h1 class="page-title">Thư viện Media</h1>
+          <p class="page-subtitle">Quản lý file audio và hình ảnh cho câu hỏi</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="toolbar">
+              <label class="btn primary" for="mediaUpload">
+                <i class="fa-solid fa-upload"></i> Upload Media
+              </label>
+              <div class="toolbar-group">
+                <select class="search-filter" id="filterMediaType" onchange="renderMedia()">
+                  <option value="">Tất cả loại</option>
+                  <option value="audio">Audio</option>
+                  <option value="image">Hình ảnh</option>
+                </select>
+                <input id="searchMedia" class="search-filter" placeholder="Tìm theo tên file..." oninput="renderMedia()"/>
+              </div>
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th style="width:60px;">#</th>
+                  <th>Tên file</th>
+                  <th>Loại</th>
+                  <th>Kích thước</th>
+                  <th>Thời lượng</th>
+                  <th>Preview</th>
+                  <th style="width:140px;">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="mediaRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- USERS & PERMISSIONS -->
+      <section id="users" class="page hidden">
+        <div class="page-header">
+          <h1 class="page-title">Quản lý người dùng</h1>
+          <p class="page-subtitle">Phân quyền và quản lý tài khoản hệ thống</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="toolbar">
+              <button class="btn primary" onclick="openUserModal()">
+                <i class="fa-solid fa-user-plus"></i> Thêm người dùng
+              </button>
+              <div class="toolbar-group">
+                <select class="search-filter" id="filterUserRole" onchange="renderUsers()">
+                  <option value="">Tất cả vai trò</option>
+                  <option value="Admin">Admin</option>
+                  <option value="Editor">Editor</option>
+                  <option value="Teacher">Teacher</option>
+                  <option value="QA">QA</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th style="width:60px;">#</th>
+                  <th>Họ tên</th>
+                  <th>Email</th>
+                  <th>Vai trò</th>
+                  <th>Quyền hạn</th>
+                  <th>Trạng thái</th>
+                  <th style="width:160px;">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="userRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- REPORTS & ANALYTICS -->
+      <section id="reports" class="page hidden">
+        <div class="page-header">
+          <h1 class="page-title">Báo cáo & Thống kê</h1>
+          <p class="page-subtitle">Phân tích hiệu quả và xu hướng sử dụng</p>
+        </div>
+
+        <div class="grid cols-2">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Điểm trung bình theo kỹ năng</div>
+            </div>
+            <div class="chart-container" id="avgChart"></div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Câu hỏi có tỷ lệ sai cao</div>
+            </div>
+            <div id="difficultQuestions">
+              <div class="loading">
+                <div class="spinner"></div>
+                <span>Đang phân tích...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mt-6">
+          <div class="card-header">
+            <div class="card-title">Thống kê sử dụng hệ thống</div>
+          </div>
+          <div class="grid cols-3">
+            <div class="text-center">
+              <div class="stat-good">98.5%</div>
+              <div class="card-subtitle">Uptime hệ thống</div>
+            </div>
+            <div class="text-center">
+              <div class="stat-info">1,247</div>
+              <div class="card-subtitle">Lượt thi trong tháng</div>
+            </div>
+            <div class="text-center">
+              <div class="stat-warn">156</div>
+              <div class="card-subtitle">Học viên hoạt động</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SYSTEM SETTINGS -->
+      <section id="settings" class="page hidden">
+        <div class="page-header">
+          <h1 class="page-title">Cài đặt hệ thống</h1>
+          <p class="page-subtitle">Cấu hình tham số và quy tắc chung</p>
+        </div>
+
+        <div class="grid cols-2">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Cài đặt bài thi</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Thời gian làm bài (phút)</label>
+              <input id="settingTime" class="form-input" type="number" min="1" step="1">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Xáo trộn câu hỏi</label>
+              <select id="settingShuffle" class="form-select">
+                <option value="true">Bật</option>
+                <option value="false">Tắt</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Cho phép xem lại</label>
+              <select id="settingAllowReview" class="form-select">
+                <option value="true">Có</option>
+                <option value="false">Không</option>
+              </select>
+            </div>
+            <div class="toolbar">
+              <button class="btn success" onclick="saveSettings()">
+                <i class="fa-solid fa-floppy-disk"></i> Lưu cài đặt
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Question Modal -->
+  <div id="modalQ" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">Câu hỏi</h2>
+        <button class="icon-btn" onclick="closeModal('modalQ')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="col-8">
+            <div class="form-group">
+              <label class="form-label">Tiêu đề *</label>
+              <input id="qTitle" class="form-input" placeholder="Nhập tiêu đề câu hỏi...">
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="form-group">
+              <label class="form-label">Kỹ năng</label>
+              <select id="qSkill" class="form-select">
+                <option>Reading</option>
+                <option>Listening</option>
+                <option>Speaking</option>
+                <option>Writing</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="col-4">
+            <div class="form-group">
+              <label class="form-label">Loại câu hỏi</label>
+              <select id="qType" class="form-select" onchange="toggleQFields(this.value)">
+                <option value="mcq_single">MCQ (1 đáp án)</option>
+                <option value="mcq_multi">MCQ (nhiều đáp án)</option>
+                <option value="fill_blank">Điền chỗ trống</option>
+                <option value="writing_prompt">Writing prompt</option>
+              </select>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="form-group">
+              <label class="form-label">Điểm số</label>
+              <input id="qScore" type="number" class="form-input" value="1" min="0" step="1">
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="form-group">
+              <label class="form-label">Độ khó</label>
+              <select id="qDifficulty" class="form-select">
+                <option value="easy">Dễ</option>
+                <option value="medium" selected>Trung bình</option>
+                <option value="hard">Khó</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Nội dung / Đề bài</label>
+          <textarea id="qStem" class="form-textarea" rows="5" placeholder="Nhập nội dung câu hỏi..."></textarea>
+        </div>
+
+        <div class="form-group" id="qOptionsWrap">
+          <label class="form-label">Lựa chọn (mỗi dòng 1 lựa chọn, đánh dấu đáp án đúng bằng * ở đầu)</label>
+          <textarea id="qOptions" class="form-textarea" rows="6" placeholder="*Đáp án đúng\nĐáp án sai 1\nĐáp án sai 2"></textarea>
+        </div>
+
+        <div class="form-row">
+          <div class="col-12">
+            <div class="form-group">
+              <label class="form-label">Tags (phân cách bằng dấu phẩy)</label>
+              <input id="qTags" class="form-input" placeholder="ví dụ: part1, grammar, vocabulary">
+            </div>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <button class="btn secondary" onclick="closeModal('modalQ')"><i class="fa-solid fa-xmark"></i> Hủy</button>
+          <button class="btn secondary" onclick="previewQuestion(editingQId)"><i class="fa-regular fa-eye"></i> Xem trước</button>
+          <button class="btn success" onclick="saveQuestion()"><i class="fa-solid fa-floppy-disk"></i> Lưu câu hỏi</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Set Modal -->
+  <div id="modalSet" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">Bộ đề</h2>
+        <button class="icon-btn" onclick="closeModal('modalSet')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="col-8">
+            <div class="form-group">
+              <label class="form-label">Tên bộ đề *</label>
+              <input id="setName" class="form-input" placeholder="Ví dụ: Reading - Part 1 - Beginner">
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="form-group">
+              <label class="form-label">Kỹ năng</label>
+              <select id="setSkill" class="form-select">
+                <option>Reading</option>
+                <option>Listening</option>
+                <option>Speaking</option>
+                <option>Writing</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="col-6">
+            <div class="form-group">
+              <label class="form-label">Trạng thái</label>
+              <select id="setStatus" class="form-select">
+                <option value="published">Published</option>
+                <option value="draft">Draft</option>
+              </select>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="form-group">
+              <label class="form-label">Danh sách ID câu hỏi (phân cách bằng dấu phẩy)</label>
+              <input id="setQuestionIds" class="form-input" placeholder="e.g. 1699999987,1699999988">
+            </div>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <button class="btn secondary" onclick="closeModal('modalSet')"><i class="fa-solid fa-xmark"></i> Hủy</button>
+          <button class="btn success" onclick="saveSet()"><i class="fa-solid fa-floppy-disk"></i> Lưu bộ đề</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tip Modal -->
+  <div id="modalTip" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">Mẹo học</h2>
+        <button class="icon-btn" onclick="closeModal('modalTip')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="col-8">
+            <div class="form-group">
+              <label class="form-label">Tiêu đề *</label>
+              <input id="tipTitle" class="form-input" placeholder="Nhập tiêu đề mẹo...">
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="form-group">
+              <label class="form-label">Kỹ năng áp dụng</label>
+              <select id="tipSkill" class="form-select">
+                <option>Reading</option>
+                <option>Listening</option>
+                <option>Speaking</option>
+                <option>Writing</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="col-6">
+            <div class="form-group">
+              <label class="form-label">Trạng thái</label>
+              <select id="tipStatus" class="form-select">
+                <option value="published">Published</option>
+                <option value="draft">Draft</option>
+              </select>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="form-group">
+              <label class="form-label">Độ ưu tiên</label>
+              <select id="tipPriority" class="form-select">
+                <option value="low">Thấp</option>
+                <option value="normal" selected>Bình thường</option>
+                <option value="high">Cao</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Nội dung mẹo học</label>
+          <textarea id="tipContent" class="form-textarea" rows="6" placeholder="Nhập nội dung mẹo..."></textarea>
+        </div>
+
+        <div class="toolbar">
+          <button class="btn secondary" onclick="closeModal('modalTip')"><i class="fa-solid fa-xmark"></i> Hủy</button>
+          <button class="btn success" onclick="saveTip()"><i class="fa-solid fa-floppy-disk"></i> Lưu mẹo</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Modal -->
+  <div id="modalUser" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">Người dùng</h2>
+        <button class="icon-btn" onclick="closeModal('modalUser')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="col-6">
+            <div class="form-group">
+              <label class="form-label">Họ tên *</label>
+              <input id="userName" class="form-input" placeholder="Nhập họ tên">
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="form-group">
+              <label class="form-label">Email *</label>
+              <input id="userEmail" class="form-input" placeholder="Nhập email">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="col-6">
+            <div class="form-group">
+              <label class="form-label">Vai trò</label>
+              <select id="userRole" class="form-select" onchange="updatePermissions()">
+                <option value="Admin">Admin</option>
+                <option value="Editor">Editor</option>
+                <option value="Teacher">Teacher</option>
+                <option value="QA">QA</option>
+              </select>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="form-group">
+              <label class="form-label">Trạng thái</label>
+              <select id="userStatus" class="form-select">
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Permissions</label>
+          <div class="permissions-list">
+            <label><input type="checkbox" class="perm" value="R"> Đọc</label>
+            <label><input type="checkbox" class="perm" value="W"> Viết</label>
+            <label><input type="checkbox" class="perm" value="WA"> Viết & duyệt</label>
+            <label><input type="checkbox" class="perm" value="D"> Xóa</label>
+            <label><input type="checkbox" class="perm" value="DA"> Xóa & duyệt</label>
+            <label><input type="checkbox" class="perm" value="ADMIN"> Quản trị viên</label>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <button class="btn secondary" onclick="closeModal('modalUser')"><i class="fa-solid fa-xmark"></i> Hủy</button>
+          <button class="btn success" onclick="saveUser()"><i class="fa-solid fa-floppy-disk"></i> Lưu người dùng</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- File input for Media -->
+  <input type="file" id="mediaUpload" style="display:none" multiple onchange="uploadMedia(event)">
+
+  <!-- Toast container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

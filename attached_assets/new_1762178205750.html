@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>APTIS KEYS - Luyện thi APTIS miễn phí</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --secondary: #06b6d4;
+            --accent: #f59e0b;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --dark: #1f2937;
+            --light: #f8fafc;
+            --glass: rgba(255, 255, 255, 0.1);
+            --glass-border: rgba(255, 255, 255, 0.2);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #9CCC65 0%, #66BB6A 50%, #1B5E20 100%);
+            min-height: 100vh;
+            display: flex;
+            overflow-x: hidden;
+        }
+
+        .sidebar {
+            width: 320px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 25px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .sidebar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+            pointer-events: none;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            margin-bottom: 40px;
+            font-size: 20px;
+            font-weight: 700;
+            position: relative;
+            z-index: 1;
+        }
+
+        .logo::before {
+            content: "🎓";
+            margin-right: 12px;
+            font-size: 28px;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+        }
+
+        .current-page {
+            background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.1) 100%);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.3);
+            padding: 16px 20px;
+            border-radius: 16px;
+            margin-bottom: 40px;
+            position: relative;
+            z-index: 1;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+
+        .section-title {
+            color: rgba(255,255,255,0.8);
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .menu-item {
+            padding: 14px 20px;
+            margin-bottom: 10px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
+            z-index: 1;
+            backdrop-filter: blur(5px);
+        }
+
+        .menu-item:hover {
+            background: rgba(255,255,255,0.15);
+            transform: translateX(8px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .menu-item::after {
+            content: "→";
+            font-size: 16px;
+            transition: transform 0.3s ease;
+        }
+
+        .menu-item:hover::after {
+            transform: translateX(5px);
+        }
+
+        .bottom-section {
+            margin-top: auto;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .rocket {
+            font-size: 50px;
+            margin-bottom: 20px;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .bottom-text {
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 20px;
+            opacity: 0.9;
+        }
+
+        .facebook-btn {
+            background: linear-gradient(135deg, #00d4aa 0%, #00b894 100%);
+            padding: 12px 24px;
+            border-radius: 25px;
+            border: none;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,212,170,0.3);
+        }
+
+        .facebook-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,212,170,0.4);
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 30px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            margin: 20px;
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+            position: relative;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 50px;
+            position: relative;
+        }
+
+        .search-container {
+            position: relative;
+        }
+
+        .search-box {
+            display: flex;
+            align-items: center;
+            background: rgba(255,255,255,0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 30px;
+            padding: 12px 24px;
+            border: 1px solid rgba(255,255,255,0.3);
+            width: 350px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+
+        .search-box:focus-within {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+            border-color: var(--primary);
+        }
+
+        .search-box input {
+            border: none;
+            background: none;
+            outline: none;
+            flex: 1;
+            padding: 8px;
+            font-size: 15px;
+            color: var(--dark);
+        }
+
+        .search-btn {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border: none;
+            color: white;
+            padding: 10px 14px;
+            border-radius: 20px;
+            cursor: pointer;
+            margin-left: 12px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(99,102,241,0.3);
+        }
+
+        .search-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(99,102,241,0.4);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .notification {
+            position: relative;
+            background: linear-gradient(135deg, var(--danger) 0%, #dc2626 100%);
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(239,68,68,0.3);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .user-avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 18px;
+            box-shadow: 0 8px 25px rgba(99,102,241,0.3);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .user-avatar:hover {
+            transform: scale(1.1);
+            box-shadow: 0 12px 35px rgba(99,102,241,0.4);
+        }
+
+        .practice-title {
+            text-align: center;
+            font-size: 42px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 50%, var(--accent) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 50px;
+            font-weight: 700;
+            letter-spacing: -1px;
+        }
+
+        .tabs {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 50px;
+            background: rgba(255,255,255,0.6);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 8px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+
+        .tab {
+            flex: 1;
+            padding: 16px 24px;
+            text-align: center;
+            background: transparent;
+            border: none;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--dark);
+            cursor: pointer;
+            border-radius: 12px;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            box-shadow: 0 8px 25px rgba(99,102,241,0.3);
+            transform: translateY(-2px);
+        }
+
+        .tab:not(.active):hover {
+            background: rgba(99,102,241,0.1);
+            transform: translateY(-1px);
+        }
+
+        .practice-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .practice-card {
+            padding: 24px;
+            border-radius: 16px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 15px;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .practice-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
+            transform: rotate(45deg);
+            transition: all 0.6s ease;
+            opacity: 0;
+        }
+
+        .practice-card:hover::before {
+            animation: shimmer 1.5s ease-in-out;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateX(100%) translateY(100%) rotate(45deg); opacity: 0; }
+        }
+
+        .practice-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        }
+
+        .practice-card.blue { 
+            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+        }
+        .practice-card.cyan { 
+            background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+        }
+        .practice-card.green { 
+            background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+        }
+        .practice-card.red { 
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        }
+        .practice-card.orange { 
+            background: linear-gradient(135deg, #fd7e14 0%, #e8590c 100%);
+        }
+        .practice-card.gray { 
+            background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+        }
+        .practice-card.purple {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        }
+
+        .card-icon {
+            font-size: 24px;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+        }
+
+        .card-text {
+            flex: 1;
+            position: relative;
+            z-index: 2;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 50px 0 30px 0;
+            position: relative;
+        }
+
+        .section-header h3 {
+            font-size: 24px;
+            background: linear-gradient(135deg, var(--dark) 0%, var(--primary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 700;
+        }
+
+        .section-divider {
+            height: 2px;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 50%, var(--accent) 100%);
+            margin: 30px 0;
+            border-radius: 2px;
+            box-shadow: 0 2px 10px rgba(99,102,241,0.3);
+        }
+
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .stat-card {
+            background: rgba(255,255,255,0.8);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 16px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.3);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+        }
+
+        .stat-number {
+            font-size: 32px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            color: var(--dark);
+            font-weight: 500;
+            opacity: 0.8;
+        }
+
+        .copyright {
+            text-align: center;
+            color: var(--dark);
+            opacity: 0.6;
+            font-size: 13px;
+            margin-top: 40px;
+            padding: 20px;
+            border-top: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .floating-elements {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .floating-circle {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            animation: floatUp 15s infinite ease-in-out;
+        }
+
+        .floating-circle:nth-child(1) {
+            width: 80px;
+            height: 80px;
+            left: 10%;
+            animation-delay: 0s;
+        }
+
+        .floating-circle:nth-child(2) {
+            width: 120px;
+            height: 120px;
+            left: 85%;
+            animation-delay: 2s;
+        }
+
+        .floating-circle:nth-child(3) {
+            width: 60px;
+            height: 60px;
+            left: 50%;
+            animation-delay: 4s;
+        }
+
+        @keyframes floatUp {
+            0% {
+                transform: translateY(100vh) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.3;
+            }
+            90% {
+                opacity: 0.3;
+            }
+            100% {
+                transform: translateY(-100px) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        .feature-badge {
+            position: absolute;
+            top: -12px;
+            right: -12px;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            z-index: 10;
+            transform: scale(1);
+            animation: badgePulse 2s infinite ease-in-out;
+            border: 2px solid rgba(255,255,255,0.3);
+            backdrop-filter: blur(5px);
+        }
+
+        .feature-badge.hot {
+            background: linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ff6b35 100%);
+            box-shadow: 0 0 20px rgba(255,107,53,0.6), 0 0 40px rgba(255,107,53,0.3);
+        }
+
+        .feature-badge.new {
+            background: linear-gradient(135deg, #00d4aa 0%, #00b894 50%, #00d4aa 100%);
+            box-shadow: 0 0 20px rgba(0,212,170,0.6), 0 0 40px rgba(0,212,170,0.3);
+        }
+
+        .feature-badge.pro {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #6366f1 100%);
+            box-shadow: 0 0 20px rgba(99,102,241,0.6), 0 0 40px rgba(99,102,241,0.3);
+        }
+
+        .feature-badge.beta {
+            background: linear-gradient(135deg, #ef4444 0%, #f59e0b 50%, #ef4444 100%);
+            box-shadow: 0 0 20px rgba(239,68,68,0.6), 0 0 40px rgba(239,68,68,0.3);
+        }
+
+        @keyframes badgePulse {
+            0%, 100% { 
+                transform: scale(1) rotate(-5deg);
+                box-shadow: 0 0 20px rgba(255,107,53,0.6), 0 0 40px rgba(255,107,53,0.3);
+            }
+            50% { 
+                transform: scale(1.1) rotate(5deg);
+                box-shadow: 0 0 30px rgba(255,107,53,0.8), 0 0 60px rgba(255,107,53,0.4);
+            }
+        }
+
+        .practice-card:hover .feature-badge {
+            transform: scale(1.15) rotate(-8deg);
+            animation: none;
+        }
+
+        .progress-indicator {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--success) 0%, var(--secondary) 100%);
+            border-radius: 0 0 16px 16px;
+            transition: width 0.8s ease;
+        }
+
+        .practice-card.blue .progress-indicator { width: 75%; }
+        .practice-card.cyan .progress-indicator { width: 60%; }
+        .practice-card.green .progress-indicator { width: 90%; }
+        .practice-card.red .progress-indicator { width: 45%; }
+        .practice-card.orange .progress-indicator { width: 80%; }
+        .practice-card.gray .progress-indicator { width: 30%; }
+
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                padding: 20px;
+            }
+            
+            .main-content {
+                margin: 10px;
+                padding: 20px;
+            }
+            
+            .practice-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .search-box {
+                width: 100%;
+            }
+            
+            .header {
+                flex-direction: column;
+                gap: 20px;
+            }
+        }
+
+        .glow {
+            position: relative;
+        }
+
+        .glow::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border-radius: inherit;
+            padding: 2px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary), var(--accent));
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: subtract;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: subtract;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .glow:hover::after {
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="floating-elements">
+        <div class="floating-circle"></div>
+        <div class="floating-circle"></div>
+        <div class="floating-circle"></div>
+    </div>
+
+    <div class="sidebar">
+        <div class="logo">
+            APTIS KEYS ®
+        </div>
+        
+        <div class="current-page">
+            🏠 Trang chủ
+        </div>
+
+        <div class="section-title">TÍNH NĂNG ÔN TẬP</div>
+        
+        <div class="menu-item">
+            📚 Ôn bộ đề
+        </div>
+        
+        <div class="menu-item">
+            💬 Ôn câu hỏi
+        </div>
+
+        <div class="section-title">XEM THÊM</div>
+        
+        <div class="menu-item">
+            🔑 Key thử thách
+        </div>
+        
+        <div class="menu-item">
+            🌍 Donate cho web
+        </div>
+
+        <div class="bottom-section">
+            <div class="rocket">🚀</div>
+            <div class="bottom-text">
+                Chúc bạn ôn tập tốt & đạt<br>
+                aim trong thời gian ngắn<br>
+                nhất!
+            </div>
+            <button class="facebook-btn">Vào nhóm facebook!</button>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="header">
+            <div class="search-container">
+                <div class="search-box">
+                    <input type="text" placeholder="Tìm kiếm bài tập, đề thi...">
+                    <button class="search-btn">🔍</button>
+                </div>
+            </div>
+            <div class="user-info">
+                <div class="notification">10</div>
+                <div class="notification">8</div>
+                <span style="font-weight: 600; color: var(--dark);">Mr. Aptis keys</span>
+                <div class="user-avatar">👤</div>
+            </div>
+        </div>
+
+        <div class="stats-container">
+            <div class="stat-card">
+                <div class="stat-number">1,250+</div>
+                <div class="stat-label">Học viên</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">500+</div>
+                <div class="stat-label">Bài tập</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">95%</div>
+                <div class="stat-label">Tỷ lệ đậu</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">24/7</div>
+                <div class="stat-label">Hỗ trợ</div>
+            </div>
+        </div>
+
+        <h1 class="practice-title">Practice Options</h1>
+
+        <div class="tabs">
+            <button class="tab active">Reading</button>
+            <button class="tab">Listening</button>
+            <button class="tab">Speaking</button>
+            <button class="tab">Writing</button>
+        </div>
+
+        <div class="practice-grid">
+            <div class="practice-card blue glow">
+                <span class="card-icon">📖</span>
+                <span class="card-text">Học theo bộ đề</span>
+                <div class="progress-indicator"></div>
+                <div class="feature-badge hot">HOT</div>
+            </div>
+            <div class="practice-card cyan glow">
+                <span class="card-icon">📖</span>
+                <span class="card-text">Luyện Reading nâng cao</span>
+                <div class="progress-indicator"></div>
+            </div>
+            <div class="practice-card blue listening glow">
+                <span class="card-icon">🎧</span>
+                <span class="card-text">Học Part 1 - Listening</span>
+                <div class="progress-indicator"></div>
+                <div class="feature-badge new">NEW</div>
+            </div>
+            <div class="practice-card purple writing glow">
+                <span class="card-icon">✏️</span>
+                <span class="card-text">Writing theo template</span>
+                <div class="progress-indicator"></div>
+            </div>
+        </div>
+
+        <div class="practice-grid">
+            <div class="practice-card green question glow">
+                <span class="card-icon">❓</span>
+                <span class="card-text">Luyện theo chủ đề</span>
+                <div class="progress-indicator"></div>
+            </div>
+            <div class="practice-card red question glow">
+                <span class="card-icon">❓</span>
+                <span class="card-text">Câu hỏi khó</span>
+                <div class="progress-indicator"></div>
+            </div>
+            <div class="practice-card green question glow">
+                <span class="card-icon">❓</span>
+                <span class="card-text">Ôn tập tổng hợp</span>
+                <div class="progress-indicator"></div>
+            </div>
+            <div class="practice-card green question glow">
+                <span class="card-icon">❓</span>
+                <span class="card-text">Mock test</span>
+                <div class="progress-indicator"></div>
+                <div class="feature-badge pro">PRO</div>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <div class="practice-grid">
+            <div class="practice-card orange tip glow">
+                <span class="card-icon">💡</span>
+                <span class="card-text">Mẹo học hiệu quả</span>
+                <div class="progress-indicator"></div>
+            </div>
+            <div class="practice-card gray tip glow">
+                <span class="card-icon">💡</span>
+                <span class="card-text">Chiến thuật làm bài</span>
+                <div class="progress-indicator"></div>
+            </div>
+            <div class="practice-card orange tip glow">
+                <span class="card-icon">💡</span>
+                <span class="card-text">Học Part 3 - Speaking</span>
+                <div class="progress-indicator"></div>
+            </div>
+            <div class="practice-card orange tip glow">
+                <span class="card-icon">💡</span>
+                <span class="card-text">Tips nâng band điểm</span>
+                <div class="progress-indicator"></div>
+            </div>
+        </div>
+
+        <div class="section-header">
+            <h3>🔑 Key thử thách</h3>
+            <h3>🎯 Khác</h3>
+        </div>
+
+        <div class="practice-grid">
+            <div class="practice-card blue key glow">
+                <span class="card-icon">🔑</span>
+                <span class="card-text">Key chuẩn APTIS</span>
+                <div class="progress-indicator"></div>
+            </div>
+            <div class="practice-card blue facebook glow">
+                <span class="card-icon">📘</span>
+                <span class="card-text">Nhóm học Facebook</span>
+                <div class="progress-indicator"></div>
+            </div>
+            <div class="practice-card orange support glow">
+                <span class="card-icon">🔗</span>
+                <span class="card-text">Key tổng hợp</span>
+                <div class="progress-indicator"></div>
+            </div>
+            <div class="practice-card red donate glow">
+                <span class="card-icon">❤️</span>
+                <span class="card-text">Ủng hộ phát triển</span>
+                <div class="progress-indicator"></div>
+            </div>
+        </div>
+
+        <div class="practice-grid" style="grid-template-columns: 1fr;">
+            <div class="practice-card cyan exercise glow">
+                <span class="card-icon">✏️</span>
+                <span class="card-text">🌟 Trang làm bài tập online - Tính năng mới!</span>
+                <div class="progress-indicator"></div>
+                <div class="feature-badge beta">BETA</div>
+            </div>
+        </div>
+
+        <div class="copyright">
+            © 2024 APTIS KEYS. Tất cả quyền được bảo lưu. | Phát triển bởi đội ngũ APTIS KEYS
+        </div>
+    </div>
+
+    <script>
+        // Tab switching functionality
+        const tabs = document.querySelectorAll('.tab');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', function() {
+                tabs.forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        // Practice card click handlers
+        const practiceCards = document.querySelectorAll('.practice-card');
+        practiceCards.forEach(card => {
+            card.addEventListener('click', function() {
+                // Add ripple effect
+                const ripple = document.createElement('div');
+                ripple.style.cssText = `
+                    position: absolute;
+                    border-radius: 50%;
+                    background: rgba(255,255,255,0.6);
+                    transform: scale(0);
+                    animation: ripple 0.6s linear;
+                    pointer-events: none;
+                    z-index: 100;
+                `;
+                
+                const rect = this.getBoundingClientRect();
+                const size = Math.max(rect.width, rect.height);
+                ripple.style.width = ripple.style.height = size + 'px';
+                ripple.style.left = (event.clientX - rect.left - size / 2) + 'px';
+                ripple.style.top = (event.clientY - rect.top - size / 2) + 'px';
+                
+                this.appendChild(ripple);
+                
+                setTimeout(() => {
+                    ripple.remove();
+                }, 600);
+                
+                console.log('Card clicked:', this.querySelector('.card-text').textContent);
+            });
+        });
+
+        // Search functionality
+        const searchInput = document.querySelector('.search-box input');
+        const searchBtn = document.querySelector('.search-btn');
+        
+        searchBtn.addEventListener('click', function() {
+            const query = searchInput.value.trim();
+            if (query) {
+                console.log('Searching for:', query);
+                // Add search functionality here
+            }
+        });
+        
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchBtn.click();
+            }
+        });
+
+        // Menu item interactions
+        const menuItems = document.querySelectorAll('.menu-item');
+        menuItems.forEach(item => {
+            item.addEventListener('click', function() {
+                console.log('Menu clicked:', this.textContent.trim());
+            });
+        });
+
+        // Facebook button
+        const facebookBtn = document.querySelector('.facebook-btn');
+        facebookBtn.addEventListener('click', function() {
+            console.log('Redirecting to Facebook group...');
+            // Add Facebook group link here
+        });
+
+        // User avatar click
+        const userAvatar = document.querySelector('.user-avatar');
+        userAvatar.addEventListener('click', function() {
+            console.log('User menu clicked');
+            // Add user menu dropdown here
+        });
+
+        // Notification clicks
+        const notifications = document.querySelectorAll('.notification');
+        notifications.forEach(notification => {
+            notification.addEventListener('click', function() {
+                console.log('Notification clicked:', this.textContent);
+                // Add notification panel here
+            });
+        });
+
+        // Add some dynamic stats animation
+        const statNumbers = document.querySelectorAll('.stat-number');
+        
+        function animateStats() {
+            statNumbers.forEach((stat, index) => {
+                const finalValue = stat.textContent;
+                const numericValue = parseInt(finalValue.replace(/\D/g, ''));
+                const suffix = finalValue.replace(/\d/g, '');
+                let currentValue = 0;
+                const increment = numericValue / 50;
+                
+                const timer = setInterval(() => {
+                    currentValue += increment;
+                    if (currentValue >= numericValue) {
+                        stat.textContent = finalValue;
+                        clearInterval(timer);
+                    } else {
+                        stat.textContent = Math.floor(currentValue) + suffix;
+                    }
+                }, 30 + (index * 10));
+            });
+        }
+
+        // Trigger stats animation on page load
+        window.addEventListener('load', function() {
+            setTimeout(animateStats, 500);
+        });
+
+        // Add ripple animation CSS
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes ripple {
+                to {
+                    transform: scale(2);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>

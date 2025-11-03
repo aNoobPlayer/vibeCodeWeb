@@ -1,0 +1,24 @@
+/* UI (split from new.html) - namespaced */
+.ui-root{--bg:#0f172a;--panel:#0b1220;--card:#0d182b;--text:#e2e8f0;--muted:#94a3b8;--accent:#22c55e;--accent2:#06b6d4}
+.ui-root{background:linear-gradient(135deg,#0b1220,#111827);color:var(--text);min-height:calc(100vh - 72px);}
+.ui-shell{display:grid;grid-template-columns:240px 1fr;gap:20px;padding:20px;}
+.ui-sidebar{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:16px;backdrop-filter: blur(6px);}
+.ui-side-title{font-weight:700;margin-bottom:8px}
+.ui-side-link a{display:flex;gap:10px;align-items:center;padding:10px;border-radius:10px;color:var(--text);text-decoration:none}
+.ui-side-link a:hover{background:rgba(255,255,255,0.06)}
+.ui-main{display:flex;flex-direction:column;gap:20px}
+.ui-hero{background:radial-gradient(1200px 300px at 20% -20%,rgba(34,197,94,.18),transparent),radial-gradient(1000px 300px at 80% -10%,rgba(6,182,212,.16),transparent);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;min-height:120px;display:flex;align-items:center;justify-content:space-between}
+.ui-hero h1{font-size:22px;margin:0}
+.ui-hero p{color:var(--muted);margin:6px 0 0}
+.ui-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+@media (max-width: 980px){.ui-shell{grid-template-columns:1fr}.ui-grid{grid-template-columns:1fr}}
+.ui-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:16px}
+.ui-card h3{margin:0 0 8px}
+.ui-tag{font-size:12px;padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1)}
+.ui-list{display:flex;flex-direction:column;gap:10px}
+.ui-btn{display:inline-flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:var(--text);text-decoration:none}
+.ui-btn:hover{background:rgba(255,255,255,.12)}
+.ui-practice{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.ui-practice .item{padding:14px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04)}
+.ui-practice .item h4{margin:0 0 6px}
+.ui-kbd{font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; padding:2px 6px; border-radius:6px; border:1px solid rgba(255,255,255,.2)}
