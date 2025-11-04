@@ -2,6 +2,9 @@ import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import fs from 'fs';
+import path from 'path';
+import { query } from "./db";
 
 const app = express();
 
@@ -39,6 +42,11 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false }));
 
+// Serve file uploads
+const uploadsDir = path.resolve(import.meta.dirname, '..', 'uploads');
+try { if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
+app.use('/uploads', express.static(uploadsDir));
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -71,6 +79,25 @@ app.use((req, res, next) => {
 
 (async () => {
   const server = await registerRoutes(app);
+
+  // Dev bootstrap: ensure at least one admin exists in SQL mode
+  try {
+    if (process.env.DATABASE_URL) {
+      const r = await query("SELECT COUNT(*) AS c FROM dbo.aptis_users");
+      const count = r.recordset?.[0]?.c ?? 0;
+      if (count === 0) {
+        await query("INSERT INTO dbo.aptis_users (email, passwordHash, name, role) VALUES (@p0,@p1,@p2,@p3)", [
+          'admin@example.com', 'admin123', 'admin', 'admin',
+        ]);
+        await query("INSERT INTO dbo.aptis_users (email, passwordHash, name, role) VALUES (@p0,@p1,@p2,@p3)", [
+          'student@example.com', 'student123', 'student', 'student',
+        ]);
+        log('Seeded default users: admin@example.com/admin123, student@example.com/student123', 'bootstrap');
+      }
+    }
+  } catch (e) {
+    log(`Bootstrap users failed: ${String((e as any)?.message || e)}`, 'bootstrap');
+  }
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

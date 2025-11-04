@@ -12,6 +12,7 @@ const Login = lazy(() => import("@/pages/login"));
 const AdminDashboard = lazy(() => import("@/pages/admin-dashboard"));
 const StudentDashboard = lazy(() => import("@/pages/student-dashboard"));
 const NotFound = lazy(() => import("@/pages/not-found"));
+const TestRunner = lazy(() => import("@/pages/test-runner"));
 
 function LoadingFallback() {
   return (
@@ -37,6 +38,11 @@ function Router() {
         <Route path="/student">
           <ProtectedRoute allowedRoles={["student"]}>
             <StudentDashboard />
+          </ProtectedRoute>
+        </Route>
+        <Route path="/student/test/:setId/:submissionId?">
+          <ProtectedRoute allowedRoles={["student"]}>
+            <TestRunner />
           </ProtectedRoute>
         </Route>
         <Route component={NotFound} />

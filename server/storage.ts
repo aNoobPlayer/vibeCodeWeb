@@ -13,6 +13,7 @@ import {
   type InsertActivity,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { query } from "./db";
 
 export interface IStorage {
   // User methods
@@ -544,4 +545,483 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+class SqlStorage implements IStorage {
+  // Users
+  async getUser(id: string) {
+    const idNum = parseInt(id, 10);
+    const result = await query(
+      `SELECT id, email, passwordHash, role FROM dbo.aptis_users WHERE id = @p0`,
+      [idNum]
+    );
+    const row = result.recordset?.[0];
+    if (!row) return undefined;
+    return {
+      id: String(row.id),
+      username: row.email,
+      password: row.passwordHash,
+      role: row.role ?? "student",
+    } as User;
+  }
+
+  async getUserByUsername(username: string) {
+    const result = await query(
+      `SELECT TOP 1 id, email, passwordHash, role FROM dbo.aptis_users WHERE email = @p0 OR name = @p0`,
+      [username]
+    );
+    const row = result.recordset?.[0];
+    if (!row) return undefined;
+    return {
+      id: String(row.id),
+      username: row.email,
+      password: row.passwordHash,
+      role: row.role ?? "student",
+    } as User;
+  }
+
+  async createUser(insertUser: InsertUser) {
+    const email = insertUser.username;
+    const name = insertUser.username;
+    const role = insertUser.role ?? "student";
+    const passwordHash = insertUser.password; // NOTE: plaintext for now; replace with hash later.
+    const result = await query(
+      `INSERT INTO dbo.aptis_users(email, passwordHash, name, role)
+       OUTPUT INSERTED.id
+       VALUES(@p0, @p1, @p2, @p3)`,
+      [email, passwordHash, name, role]
+    );
+    const id = String(result.recordset[0].id);
+    return { id, username: email, password: passwordHash, role } as User;
+  }
+
+  // Test Sets
+  async getAllTestSets(): Promise<TestSet[]> {
+    const result = await query(`
+      SELECT s.id, s.name, s.[description], s.[status], s.timeLimit, s.level, s.createdAt,
+             (SELECT COUNT(*) FROM dbo.aptis_set_questions sq WHERE sq.setId = s.id) AS questionCount
+      FROM dbo.aptis_sets s
+      ORDER BY s.createdAt DESC
+    `);
+    return (result.recordset || []).map((r: any) => ({
+      id: String(r.id),
+      title: r.name,
+      description: r.description ?? null,
+      skill: 'General',
+      questionCount: r.questionCount ?? 0,
+      status: r.status ?? 'published',
+      difficulty: r.level ?? 'medium',
+      timeLimit: r.timeLimit ?? 60,
+      updatedAt: r.createdAt ?? new Date().toISOString(),
+    } as TestSet));
+  }
+
+  async getTestSet(id: string): Promise<TestSet | undefined> {
+    const idNum = parseInt(id, 10);
+    const result = await query(
+      `SELECT s.id, s.name, s.[description], s.[status], s.timeLimit, s.level, s.createdAt,
+              (SELECT COUNT(*) FROM dbo.aptis_set_questions sq WHERE sq.setId = s.id) AS questionCount
+       FROM dbo.aptis_sets s WHERE s.id = @p0`,
+      [idNum]
+    );
+    const r = result.recordset?.[0];
+    if (!r) return undefined;
+    return {
+      id: String(r.id),
+      title: r.name,
+      description: r.description ?? null,
+      skill: 'General',
+      questionCount: r.questionCount ?? 0,
+      status: r.status ?? 'published',
+      difficulty: r.level ?? 'medium',
+      timeLimit: r.timeLimit ?? 60,
+      updatedAt: r.createdAt ?? new Date().toISOString(),
+    } as TestSet;
+  }
+
+  async createTestSet(insertTestSet: InsertTestSet): Promise<TestSet> {
+    const result = await query(
+      `INSERT INTO dbo.aptis_sets(name, [description], [status], timeLimit, level)
+       OUTPUT INSERTED.id, INSERTED.name, INSERTED.[description], INSERTED.[status], INSERTED.timeLimit, INSERTED.level, INSERTED.createdAt
+       VALUES(@p0, @p1, @p2, @p3, @p4)`,
+      [
+        insertTestSet.title,
+        insertTestSet.description ?? null,
+        insertTestSet.status ?? 'draft',
+        insertTestSet.timeLimit ?? 60,
+        insertTestSet.difficulty ?? 'medium',
+      ]
+    );
+    const r = result.recordset[0];
+    return {
+      id: String(r.id),
+      title: r.name,
+      description: r.description ?? null,
+      skill: insertTestSet.skill ?? 'General',
+      questionCount: 0,
+      status: r.status ?? 'draft',
+      difficulty: r.level ?? 'medium',
+      timeLimit: r.timeLimit ?? 60,
+      updatedAt: r.createdAt ?? new Date().toISOString(),
+    } as TestSet;
+  }
+
+  async updateTestSet(id: string, testSet: Partial<InsertTestSet>): Promise<TestSet | undefined> {
+    const idNum = parseInt(id, 10);
+    // Build dynamic update
+    const fields: string[] = [];
+    const params: any[] = [];
+    if (testSet.title !== undefined) { fields.push('name = @p' + params.length); params.push(testSet.title); }
+    if (testSet.description !== undefined) { fields.push('[description] = @p' + params.length); params.push(testSet.description); }
+    if (testSet.status !== undefined) { fields.push('[status] = @p' + params.length); params.push(testSet.status); }
+    if (testSet.timeLimit !== undefined) { fields.push('timeLimit = @p' + params.length); params.push(testSet.timeLimit); }
+    if (testSet.difficulty !== undefined) { fields.push('level = @p' + params.length); params.push(testSet.difficulty); }
+
+    if (fields.length === 0) return this.getTestSet(id);
+
+    const setClause = fields.join(', ');
+    await query(`UPDATE dbo.aptis_sets SET ${setClause} WHERE id = @p${params.length}`, [...params, idNum]);
+    return this.getTestSet(id);
+  }
+
+  async deleteTestSet(id: string): Promise<boolean> {
+    const idNum = parseInt(id, 10);
+    const result = await query(`DELETE FROM dbo.aptis_sets WHERE id = @p0`, [idNum]);
+    return (result.rowsAffected?.[0] ?? 0) > 0;
+  }
+
+  // Questions
+  private mapQuestionRow(r: any): Question {
+    const options = r.optionsJson ? safeParseJsonArray(r.optionsJson) : [];
+    const correctAnswers = r.answerKey ? safeParseJsonArray(r.answerKey) : [];
+    return {
+      id: String(r.id),
+      title: r.title ?? null,
+      skill: r.skill,
+      type: r.type,
+      points: r.score ?? 1,
+      tags: [],
+      content: r.stem,
+      options,
+      correctAnswers,
+      mediaUrl: r.mediaUrl ?? null,
+      explanation: r.explain ?? null,
+    } as unknown as Question;
+  }
+
+  async getAllQuestions(): Promise<Question[]> {
+    const result = await query(`
+      SELECT q.id, q.title, q.skill, q.[type], q.stem, q.optionsJson, q.answerKey, q.explain, m.url AS mediaUrl
+      FROM dbo.aptis_questions q
+      LEFT JOIN dbo.aptis_media m ON m.id = q.mediaId
+      ORDER BY q.createdAt DESC
+    `);
+    return (result.recordset || []).map((r: any) => this.mapQuestionRow(r));
+  }
+
+  async getQuestion(id: string): Promise<Question | undefined> {
+    const idNum = parseInt(id, 10);
+    const result = await query(
+      `SELECT q.id, q.title, q.skill, q.[type], q.stem, q.optionsJson, q.answerKey, q.explain, m.url AS mediaUrl
+       FROM dbo.aptis_questions q
+       LEFT JOIN dbo.aptis_media m ON m.id = q.mediaId
+       WHERE q.id = @p0`,
+      [idNum]
+    );
+    const r = result.recordset?.[0];
+    return r ? this.mapQuestionRow(r) : undefined;
+  }
+
+  async getQuestionsBySkill(skill: string): Promise<Question[]> {
+    const result = await query(
+      `SELECT q.id, q.title, q.skill, q.[type], q.stem, q.optionsJson, q.answerKey, q.explain, m.url AS mediaUrl
+       FROM dbo.aptis_questions q
+       LEFT JOIN dbo.aptis_media m ON m.id = q.mediaId
+       WHERE q.skill = @p0
+       ORDER BY q.createdAt DESC`,
+      [skill]
+    );
+    return (result.recordset || []).map((r: any) => this.mapQuestionRow(r));
+  }
+
+  async createQuestion(question: InsertQuestion): Promise<Question> {
+    const optionsJson = question.options ? JSON.stringify(question.options) : null;
+    const answerKey = question.correctAnswers ? JSON.stringify(question.correctAnswers) : null;
+    const result = await query(
+      `INSERT INTO dbo.aptis_questions(title, skill, [type], stem, optionsJson, answerKey, explain)
+       OUTPUT INSERTED.id
+       VALUES(@p0, @p1, @p2, @p3, @p4, @p5, @p6)`,
+      [
+        (question as any).title ?? null,
+        question.skill,
+        question.type,
+        question.content,
+        optionsJson,
+        answerKey,
+        (question as any).explanation ?? null,
+      ]
+    );
+    const id = String(result.recordset[0].id);
+    const created = await this.getQuestion(id);
+    if (!created) throw new Error('Failed to create question');
+    return created;
+  }
+
+  async updateQuestion(id: string, question: Partial<InsertQuestion>): Promise<Question | undefined> {
+    const idNum = parseInt(id, 10);
+    const fields: string[] = [];
+    const params: any[] = [];
+    if ((question as any).title !== undefined) { fields.push('title = @p' + params.length); params.push((question as any).title); }
+    if (question.skill !== undefined) { fields.push('skill = @p' + params.length); params.push(question.skill); }
+    if (question.type !== undefined) { fields.push('[type] = @p' + params.length); params.push(question.type); }
+    if ((question as any).content !== undefined) { fields.push('stem = @p' + params.length); params.push((question as any).content); }
+    if ((question as any).options !== undefined) { fields.push('optionsJson = @p' + params.length); params.push(JSON.stringify((question as any).options)); }
+    if ((question as any).correctAnswers !== undefined) { fields.push('answerKey = @p' + params.length); params.push(JSON.stringify((question as any).correctAnswers)); }
+    if ((question as any).explanation !== undefined) { fields.push('explain = @p' + params.length); params.push((question as any).explanation); }
+    if (fields.length === 0) return this.getQuestion(id);
+    const setClause = fields.join(', ');
+    await query(`UPDATE dbo.aptis_questions SET ${setClause} WHERE id = @p${params.length}`, [...params, idNum]);
+    return this.getQuestion(id);
+  }
+
+  async deleteQuestion(id: string): Promise<boolean> {
+    const idNum = parseInt(id, 10);
+    const result = await query(`DELETE FROM dbo.aptis_questions WHERE id = @p0`, [idNum]);
+    return (result.rowsAffected?.[0] ?? 0) > 0;
+  }
+
+  // Tips
+  async getAllTips(): Promise<Tip[]> {
+    const result = await query(`
+      SELECT id, title, skill, content, [status], priority, createdAt
+      FROM dbo.aptis_tips
+      ORDER BY createdAt DESC
+    `);
+    return (result.recordset || []).map((r: any) => ({
+      id: String(r.id),
+      title: r.title,
+      skill: r.skill,
+      content: r.content,
+      status: r.status ?? 'published',
+      priority: r.priority ?? 'medium',
+      createdAt: r.createdAt,
+    } as unknown as Tip));
+  }
+
+  async getTip(id: string): Promise<Tip | undefined> {
+    const idNum = parseInt(id, 10);
+    const result = await query(`SELECT id, title, skill, content, [status], priority, createdAt FROM dbo.aptis_tips WHERE id = @p0`, [idNum]);
+    const r = result.recordset?.[0];
+    if (!r) return undefined;
+    return {
+      id: String(r.id),
+      title: r.title,
+      skill: r.skill,
+      content: r.content,
+      status: r.status ?? 'published',
+      priority: r.priority ?? 'medium',
+      createdAt: r.createdAt,
+    } as unknown as Tip;
+  }
+
+  async getTipsBySkill(skill: string): Promise<Tip[]> {
+    const result = await query(
+      `SELECT id, title, skill, content, [status], priority, createdAt FROM dbo.aptis_tips WHERE skill = @p0 ORDER BY createdAt DESC`,
+      [skill]
+    );
+    return (result.recordset || []).map((r: any) => ({
+      id: String(r.id),
+      title: r.title,
+      skill: r.skill,
+      content: r.content,
+      status: r.status ?? 'published',
+      priority: r.priority ?? 'medium',
+      createdAt: r.createdAt,
+    } as unknown as Tip));
+  }
+
+  async createTip(tip: InsertTip): Promise<Tip> {
+    const result = await query(
+      `INSERT INTO dbo.aptis_tips(title, skill, content, [status], priority)
+       OUTPUT INSERTED.id
+       VALUES(@p0, @p1, @p2, @p3, @p4)`,
+      [tip.title, tip.skill, tip.content, tip.status ?? 'published', (tip as any).priority ?? 'medium']
+    );
+    const id = String(result.recordset[0].id);
+    const created = await this.getTip(id);
+    if (!created) throw new Error('Failed to create tip');
+    return created;
+  }
+
+  async updateTip(id: string, tip: Partial<InsertTip>): Promise<Tip | undefined> {
+    const idNum = parseInt(id, 10);
+    const fields: string[] = [];
+    const params: any[] = [];
+    if (tip.title !== undefined) { fields.push('title = @p' + params.length); params.push(tip.title); }
+    if (tip.skill !== undefined) { fields.push('skill = @p' + params.length); params.push(tip.skill); }
+    if (tip.content !== undefined) { fields.push('content = @p' + params.length); params.push(tip.content); }
+    if ((tip as any).status !== undefined) { fields.push('[status] = @p' + params.length); params.push((tip as any).status); }
+    if ((tip as any).priority !== undefined) { fields.push('priority = @p' + params.length); params.push((tip as any).priority); }
+    if (fields.length === 0) return this.getTip(id);
+    const setClause = fields.join(', ');
+    await query(`UPDATE dbo.aptis_tips SET ${setClause} WHERE id = @p${params.length}`, [...params, idNum]);
+    return this.getTip(id);
+  }
+
+  async deleteTip(id: string): Promise<boolean> {
+    const idNum = parseInt(id, 10);
+    const result = await query(`DELETE FROM dbo.aptis_tips WHERE id = @p0`, [idNum]);
+    return (result.rowsAffected?.[0] ?? 0) > 0;
+  }
+
+  // Media
+  async getAllMedia(): Promise<Media[]> {
+    const result = await query(`
+      SELECT id, name, [type], url, createdAt FROM dbo.aptis_media ORDER BY createdAt DESC
+    `);
+    return (result.recordset || []).map((r: any) => ({
+      id: String(r.id),
+      filename: r.name,
+      type: r.type,
+      url: r.url,
+      uploadedAt: r.createdAt,
+    } as unknown as Media));
+  }
+
+  async getMedia(id: string): Promise<Media | undefined> {
+    const idNum = parseInt(id, 10);
+    const result = await query(`SELECT id, name, [type], url, createdAt FROM dbo.aptis_media WHERE id = @p0`, [idNum]);
+    const r = result.recordset?.[0];
+    if (!r) return undefined;
+    return {
+      id: String(r.id),
+      filename: r.name,
+      type: r.type,
+      url: r.url,
+      uploadedAt: r.createdAt,
+    } as unknown as Media;
+  }
+
+  async createMedia(media: InsertMedia): Promise<Media> {
+    const result = await query(
+      `INSERT INTO dbo.aptis_media(name, [type], url)
+       OUTPUT INSERTED.id
+       VALUES(@p0, @p1, @p2)`,
+      [media.filename, media.type, media.url]
+    );
+    const id = String(result.recordset[0].id);
+    const created = await this.getMedia(id);
+    if (!created) throw new Error('Failed to create media');
+    return created;
+  }
+
+  async deleteMedia(id: string): Promise<boolean> {
+    const idNum = parseInt(id, 10);
+    const result = await query(`DELETE FROM dbo.aptis_media WHERE id = @p0`, [idNum]);
+    return (result.rowsAffected?.[0] ?? 0) > 0;
+  }
+
+  // Activities & Stats
+  async getAllActivities(): Promise<Activity[]> {
+    const result = await query(`SELECT TOP 100 id, action, details, createdAt FROM dbo.aptis_audit_logs ORDER BY createdAt DESC`);
+    return (result.recordset || []).map((r: any) => ({
+      id: String(r.id),
+      action: r.action,
+      resourceType: inferResourceType(r.details),
+      resourceTitle: inferResourceTitle(r.details),
+      timestamp: r.createdAt,
+    } as unknown as Activity));
+  }
+
+  async getRecentActivities(limit: number): Promise<Activity[]> {
+    const result = await query(`
+      SELECT TOP(${Math.max(1, Math.min(100, limit))}) id, action, details, createdAt
+      FROM dbo.aptis_audit_logs
+      ORDER BY createdAt DESC
+    `);
+    return (result.recordset || []).map((r: any) => ({
+      id: String(r.id),
+      action: r.action,
+      resourceType: inferResourceType(r.details),
+      resourceTitle: inferResourceTitle(r.details),
+      timestamp: r.createdAt,
+    } as unknown as Activity));
+  }
+
+  async createActivity(activity: InsertActivity): Promise<Activity> {
+    const details = JSON.stringify({ resourceType: (activity as any).resourceType, resourceTitle: (activity as any).resourceTitle });
+    const result = await query(
+      `INSERT INTO dbo.aptis_audit_logs(action, details)
+       OUTPUT INSERTED.id, INSERTED.action, INSERTED.details, INSERTED.createdAt
+       VALUES(@p0, @p1)`,
+      [activity.action, details]
+    );
+    const r = result.recordset[0];
+    return {
+      id: String(r.id),
+      action: r.action,
+      resourceType: inferResourceType(r.details),
+      resourceTitle: inferResourceTitle(r.details),
+      timestamp: r.createdAt,
+    } as unknown as Activity;
+  }
+
+  async getStats(): Promise<{ setsCount: number; questionsCount: number; tipsCount: number; mediaCount: number; }> {
+    const [sets, questions, tips, media] = await Promise.all([
+      query(`SELECT COUNT(*) AS c FROM dbo.aptis_sets`),
+      query(`SELECT COUNT(*) AS c FROM dbo.aptis_questions`),
+      query(`SELECT COUNT(*) AS c FROM dbo.aptis_tips`),
+      query(`SELECT COUNT(*) AS c FROM dbo.aptis_media`),
+    ]);
+    return {
+      setsCount: sets.recordset?.[0]?.c ?? 0,
+      questionsCount: questions.recordset?.[0]?.c ?? 0,
+      tipsCount: tips.recordset?.[0]?.c ?? 0,
+      mediaCount: media.recordset?.[0]?.c ?? 0,
+    };
+  }
+
+  async getQuestionDistribution(): Promise<{ reading: number; listening: number; speaking: number; writing: number; }> {
+    const result = await query(`
+      SELECT LOWER(skill) AS skill, COUNT(*) AS c
+      FROM dbo.aptis_questions
+      GROUP BY skill
+    `);
+    const map: Record<string, number> = { reading: 0, listening: 0, speaking: 0, writing: 0 };
+    for (const r of result.recordset || []) {
+      if (r.skill && map.hasOwnProperty(r.skill)) map[r.skill] = r.c;
+    }
+    return {
+      reading: map.reading,
+      listening: map.listening,
+      speaking: map.speaking,
+      writing: map.writing,
+    };
+  }
+}
+
+function safeParseJsonArray(v: any): string[] {
+  try {
+    const parsed = typeof v === 'string' ? JSON.parse(v) : v;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function inferResourceType(details: any): string {
+  try {
+    const d = typeof details === 'string' ? JSON.parse(details) : details;
+    if (d && typeof d.resourceType === 'string') return d.resourceType;
+  } catch {}
+  return 'general';
+}
+
+function inferResourceTitle(details: any): string {
+  try {
+    const d = typeof details === 'string' ? JSON.parse(details) : details;
+    if (d && typeof d.resourceTitle === 'string') return d.resourceTitle;
+    if (d && typeof d.title === 'string') return d.title;
+  } catch {}
+  return 'Activity';
+}
+
+export const storage: IStorage = process.env.DATABASE_URL ? new SqlStorage() : new MemStorage();

@@ -264,6 +264,8 @@ function PracticePage({ searchQuery }: { searchQuery: string }) {
 }
 
 // Practice Card Component
+import { useLocation } from "wouter";
+
 function PracticeCard({ testSet }: { testSet: TestSet }) {
   const gradients = {
     Reading: "from-blue-500 to-blue-700",
@@ -281,8 +283,33 @@ function PracticeCard({ testSet }: { testSet: TestSet }) {
   
   const IconComponent = icons[testSet.skill as keyof typeof icons];
 
+  const [, setLocation] = useLocation();
+
+  async function onStart() {
+    try {
+      const res = await fetch("/api/submissions/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ setId: testSet.id }),
+      });
+      if (!res.ok) {
+        const msg = await res.text();
+        throw new Error(msg || `Failed to start submission`);
+      }
+      const data = await res.json();
+      const submissionId = data.id;
+      setLocation(`/student/test/${testSet.id}/${submissionId}`);
+    } catch (e) {
+      // Optionally surface error via toast if available
+      console.error(e);
+      alert("Cannot start test. Please login or try again.");
+    }
+  }
+
   return (
     <button
+      onClick={onStart}
       data-testid={`practice-card-${testSet.id}`}
       className={`relative overflow-hidden bg-gradient-to-br ${
         gradients[testSet.skill as keyof typeof gradients]
