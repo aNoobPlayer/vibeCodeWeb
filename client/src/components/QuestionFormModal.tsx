@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
@@ -45,6 +46,24 @@ export function QuestionFormModal({ open, onOpenChange, question }: QuestionForm
     },
   });
 
+  // Reset form when question prop changes or dialog closes
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        title: question?.title || "",
+        skill: question?.skill || "Reading",
+        type: question?.type || "mcq_single",
+        content: question?.content || "",
+        points: question?.points || 1,
+        options: question?.options || [],
+        correctAnswers: question?.correctAnswers || [],
+        explanation: question?.explanation || "",
+        mediaUrl: question?.mediaUrl || "",
+        tags: question?.tags || [],
+      });
+    }
+  }, [question, open, form]);
+
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
       if (isEdit) {
@@ -60,7 +79,6 @@ export function QuestionFormModal({ open, onOpenChange, question }: QuestionForm
         description: `The question has been ${isEdit ? "updated" : "created"} successfully.`,
       });
       onOpenChange(false);
-      form.reset();
     },
     onError: (error: any) => {
       toast({

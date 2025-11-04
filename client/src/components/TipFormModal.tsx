@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
@@ -40,6 +41,19 @@ export function TipFormModal({ open, onOpenChange, tip }: TipFormModalProps) {
     },
   });
 
+  // Reset form when tip prop changes or dialog closes
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        title: tip?.title || "",
+        skill: tip?.skill || "Reading",
+        content: tip?.content || "",
+        status: tip?.status || "published",
+        priority: tip?.priority || "medium",
+      });
+    }
+  }, [tip, open, form]);
+
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
       if (isEdit) {
@@ -55,7 +69,6 @@ export function TipFormModal({ open, onOpenChange, tip }: TipFormModalProps) {
         description: `The tip has been ${isEdit ? "updated" : "created"} successfully.`,
       });
       onOpenChange(false);
-      form.reset();
     },
     onError: (error: any) => {
       toast({

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
@@ -41,6 +42,21 @@ export function TestSetFormModal({ open, onOpenChange, testSet }: TestSetFormMod
     },
   });
 
+  // Reset form when testSet prop changes or dialog closes
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        title: testSet?.title || "",
+        description: testSet?.description || "",
+        skill: testSet?.skill || "Reading",
+        questionCount: testSet?.questionCount || 0,
+        status: testSet?.status || "draft",
+        difficulty: testSet?.difficulty || "medium",
+        timeLimit: testSet?.timeLimit || 60,
+      });
+    }
+  }, [testSet, open, form]);
+
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
       if (isEdit) {
@@ -56,7 +72,6 @@ export function TestSetFormModal({ open, onOpenChange, testSet }: TestSetFormMod
         description: `The test set has been ${isEdit ? "updated" : "created"} successfully.`,
       });
       onOpenChange(false);
-      form.reset();
     },
     onError: (error: any) => {
       toast({

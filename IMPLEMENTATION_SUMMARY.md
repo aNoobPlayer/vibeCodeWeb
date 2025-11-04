@@ -18,12 +18,25 @@
 - Added field to Tips: `priority`
 - Fixed TypeScript type safety across storage layer
 
-### 3. CRUD Components (Started)
+### 3. CRUD Components (Complete)
 - **TestSetFormModal**: Complete form for creating/editing test sets
   - Form validation with Zod
   - All fields: title, description, skill, difficulty, status, timeLimit
-  - Create and Edit modes
+  - Create and Edit modes with proper form reset on prop changes
   - Integration with backend API
+- **QuestionFormModal**: Complete form for creating/editing questions
+  - All fields: title, skill, type, content, points, explanation
+  - Supports array fields (options, correctAnswers, tags)
+  - Create and Edit modes with proper form reset
+- **TipFormModal**: Complete form for creating/editing tips
+  - All fields: title, skill, content, status, priority
+  - Create and Edit modes with proper form reset
+  
+All modals include:
+- Proper form reset when props change (fixes stale data issue)
+- Loading states during mutations
+- Error handling with toast notifications
+- Data-testid attributes for testing
 
 ### 4. Performance Optimization
 - **Lazy Loading**: All page components are lazy-loaded
