@@ -7,9 +7,12 @@ import { z } from "zod";
 export const testSets = pgTable("test_sets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title").notNull(),
-  skill: text("skill").notNull(), // Reading, Listening, Speaking, Writing
+  description: text("description"),
+  skill: text("skill").notNull(), // Reading, Listening, Speaking, Writing, GrammarVocabulary
   questionCount: integer("question_count").notNull().default(0),
   status: text("status").notNull().default("draft"), // draft, published
+  difficulty: text("difficulty").default("medium"), // easy, medium, hard
+  timeLimit: integer("time_limit").default(60),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
@@ -47,9 +50,10 @@ export type Question = typeof questions.$inferSelect;
 export const tips = pgTable("tips", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title").notNull(),
-  skill: text("skill").notNull(), // Reading, Listening, Speaking, Writing, General
+  skill: text("skill").notNull(), // Reading, Listening, Speaking, Writing, GrammarVocabulary, General
   content: text("content").notNull(),
   status: text("status").notNull().default("published"), // draft, published
+  priority: text("priority").default("medium"), // high, medium, low
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

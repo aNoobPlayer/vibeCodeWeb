@@ -246,8 +246,11 @@ export class MemStorage implements IStorage {
     const testSet: TestSet = {
       ...insertTestSet,
       id,
+      description: insertTestSet.description ?? null,
       questionCount: insertTestSet.questionCount ?? 0,
       status: insertTestSet.status || "draft",
+      difficulty: insertTestSet.difficulty ?? null,
+      timeLimit: insertTestSet.timeLimit ?? null,
       updatedAt: new Date(),
     };
     this.testSets.set(id, testSet);
@@ -393,6 +396,7 @@ export class MemStorage implements IStorage {
       ...insertTip,
       id,
       status: insertTip.status || "published",
+      priority: insertTip.priority ?? null,
       createdAt: new Date(),
     };
     this.tips.set(id, tip);
