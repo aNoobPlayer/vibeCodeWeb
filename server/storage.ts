@@ -90,6 +90,19 @@ export class MemStorage implements IStorage {
   }
 
   private async initializeSampleData() {
+    // Create sample users
+    await this.createUser({
+      username: "admin",
+      password: "admin123",
+      role: "admin",
+    });
+
+    await this.createUser({
+      username: "student",
+      password: "student123",
+      role: "student",
+    });
+
     // Create sample test sets
     const sampleSets = [
       { title: "APTIS Reading Test 1", skill: "Reading", questionCount: 25, status: "published" },
@@ -208,7 +221,11 @@ export class MemStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
-    const user: User = { ...insertUser, id };
+    const user: User = { 
+      ...insertUser, 
+      id,
+      role: insertUser.role || "student"
+    };
     this.users.set(id, user);
     return user;
   }
@@ -229,6 +246,8 @@ export class MemStorage implements IStorage {
     const testSet: TestSet = {
       ...insertTestSet,
       id,
+      questionCount: insertTestSet.questionCount ?? 0,
+      status: insertTestSet.status || "draft",
       updatedAt: new Date(),
     };
     this.testSets.set(id, testSet);
@@ -295,7 +314,16 @@ export class MemStorage implements IStorage {
 
   async createQuestion(insertQuestion: InsertQuestion): Promise<Question> {
     const id = randomUUID();
-    const question: Question = { ...insertQuestion, id };
+    const question: Question = { 
+      ...insertQuestion, 
+      id,
+      points: insertQuestion.points ?? 1,
+      tags: insertQuestion.tags ?? null,
+      options: insertQuestion.options ?? null,
+      correctAnswers: insertQuestion.correctAnswers ?? null,
+      mediaUrl: insertQuestion.mediaUrl ?? null,
+      explanation: insertQuestion.explanation ?? null,
+    };
     this.questions.set(id, question);
 
     // Create activity
@@ -364,6 +392,7 @@ export class MemStorage implements IStorage {
     const tip: Tip = {
       ...insertTip,
       id,
+      status: insertTip.status || "published",
       createdAt: new Date(),
     };
     this.tips.set(id, tip);

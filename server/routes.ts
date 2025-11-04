@@ -3,8 +3,69 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertTestSetSchema, insertQuestionSchema, insertTipSchema, insertMediaSchema } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
+import { z } from "zod";
+
+const loginSchema = z.object({
+  username: z.string().min(1),
+  password: z.string().min(1),
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Auth endpoints
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const result = loginSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: fromZodError(result.error).message });
+      }
+
+      const { username, password } = result.data;
+      const user = await storage.getUserByUsername(username);
+
+      if (!user || user.password !== password) {
+        return res.status(401).json({ error: "Invalid username or password" });
+      }
+
+      req.session.userId = user.id;
+      req.session.username = user.username;
+      req.session.role = user.role;
+
+      res.json({
+        id: user.id,
+        username: user.username,
+        role: user.role,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/auth/logout", async (req, res) => {
+    req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).json({ error: "Failed to logout" });
+      }
+      res.json({ message: "Logged out successfully" });
+    });
+  });
+
+  app.get("/api/auth/me", async (req, res) => {
+    if (!req.session.userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    const user = await storage.getUser(req.session.userId);
+    if (!user) {
+      return res.status(401).json({ error: "User not found" });
+    }
+
+    res.json({
+      id: user.id,
+      username: user.username,
+      role: user.role,
+    });
+  });
+
   // Stats endpoints
   app.get("/api/stats", async (_req, res) => {
     try {

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -56,6 +65,8 @@ import {
   BarChart3,
   Volume2,
   Image,
+  LogOut,
+  UserCircle,
 } from "lucide-react";
 import type { TestSet, Question, Tip, Media, Activity } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
@@ -64,6 +75,7 @@ export default function AdminDashboard() {
   const [currentView, setCurrentView] = useState("dashboard");
   const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
+  const { user, logout } = useAuth();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -101,14 +113,35 @@ export default function AdminDashboard() {
           <Button data-testid="button-settings" variant="ghost" size="icon">
             <SlidersHorizontal className="w-5 h-5" />
           </Button>
-          <div className="flex items-center gap-3 px-4 py-2 rounded-full bg-gray-100 hover-elevate cursor-pointer" data-testid="button-user-menu">
-            <Avatar className="w-8 h-8">
-              <AvatarImage src="https://i.pravatar.cc/40" alt="Admin" />
-              <AvatarFallback>AD</AvatarFallback>
-            </Avatar>
-            <span className="font-medium text-sm">Admin</span>
-            <ChevronDown className="w-3 h-3" />
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <div className="flex items-center gap-3 px-4 py-2 rounded-full bg-gray-100 hover-elevate cursor-pointer" data-testid="button-user-menu">
+                <Avatar className="w-8 h-8">
+                  <AvatarImage src="https://i.pravatar.cc/40" alt="Admin" />
+                  <AvatarFallback>AD</AvatarFallback>
+                </Avatar>
+                <span className="font-medium text-sm">{user?.username || "Admin"}</span>
+                <ChevronDown className="w-3 h-3" />
+              </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Tài khoản của tôi</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem>
+                <UserCircle className="mr-2 h-4 w-4" />
+                <span>Hồ sơ</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Settings className="mr-2 h-4 w-4" />
+                <span>Cài đặt</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={logout} data-testid="button-logout">
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Đăng xuất</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 

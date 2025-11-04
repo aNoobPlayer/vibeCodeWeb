@@ -1,10 +1,19 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   GraduationCap,
   Rocket,
@@ -19,12 +28,16 @@ import {
   Timer,
   Flame,
   Trophy,
+  LogOut,
+  UserCircle,
+  Settings,
 } from "lucide-react";
 import type { TestSet, Tip } from "@shared/schema";
 
 export default function StudentDashboard() {
   const [currentPage, setCurrentPage] = useState("practice");
   const [searchQuery, setSearchQuery] = useState("");
+  const { user, logout } = useAuth();
 
   return (
     <div className="min-h-screen flex bg-gradient-to-br from-[#9CCC65] via-[#66BB6A] to-[#1B5E20]">
@@ -143,9 +156,30 @@ export default function StudentDashboard() {
               <div className="relative bg-gradient-to-br from-destructive to-red-600 w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold shadow-lg animate-pulse">
                 3
               </div>
-              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-semibold text-lg shadow-lg cursor-pointer hover:scale-110 transition-transform" data-testid="button-student-avatar">
-                SV
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <div className="w-11 h-11 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-semibold text-lg shadow-lg cursor-pointer hover:scale-110 transition-transform" data-testid="button-student-avatar">
+                    {user?.username?.charAt(0).toUpperCase() || "SV"}
+                  </div>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>Tài khoản của tôi</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem>
+                    <UserCircle className="mr-2 h-4 w-4" />
+                    <span>Hồ sơ</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem>
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Cài đặt</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={logout} data-testid="button-logout">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Đăng xuất</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </header>
 

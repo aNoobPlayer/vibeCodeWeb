@@ -1,8 +1,31 @@
 import express, { type Request, Response, NextFunction } from "express";
+import session from "express-session";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
+
+declare module 'express-session' {
+  interface SessionData {
+    userId?: string;
+    username?: string;
+    role?: string;
+  }
+}
+
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "aptis-keys-secret-development-only",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      sameSite: "lax",
+      maxAge: 1000 * 60 * 60 * 24,
+    },
+  })
+);
 
 declare module 'http' {
   interface IncomingMessage {
