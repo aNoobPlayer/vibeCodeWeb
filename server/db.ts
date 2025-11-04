@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const config = {
-  server: '(localdb)\\\\MSSQLLocalDB',
+  server: 'sqlserver://localhost:1433',
   database: 'LuanVan',
   options: {
     encrypt: true,

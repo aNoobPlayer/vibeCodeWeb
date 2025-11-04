@@ -46,7 +46,7 @@ export const SQL_CONFIG = {
   port: 1433,
   database: 'LuanVan',
   user: 'sa',
-  password: 'system!@#'
+  password: '111111'
 };
 ```
 

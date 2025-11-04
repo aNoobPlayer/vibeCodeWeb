@@ -31,13 +31,13 @@ export const LOCALSTORAGE_CONFIG = {
 ```javascript
 // File: src/config/database.js
 export const SQL_CONFIG = {
-  connectionString: 'Server=localhost;Database=LuanVan;User Id=sa;Password=system!@#;...',
+  connectionString: 'Server=localhost;Database=LuanVan;User Id=sa;Password=111111;...',
   // hoặc
   host: 'localhost',
   port: 1433,
   database: 'LuanVan',
   user: 'sa',
-  password: 'system!@#'
+  password: '111111'
 };
 
 // File: src/config/database.js
@@ -158,7 +158,7 @@ export const SQL_CONFIG = {
   port: 1433,
   database: 'LuanVan',         // Tên database
   user: 'sa',                  // SQL Server user
-  password: 'system!@#'        // SQL Server password
+  password: '111111'        // SQL Server password
 };
 
 export const API_CONFIG = {

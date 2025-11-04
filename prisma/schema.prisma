@@ -1,0 +1,85 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  email        String    @unique @db.NVarChar(255)
+  passwordHash String    @db.NVarChar(255)
+  name         String    @db.NVarChar(150)
+  role         String    @default("student") @db.NVarChar(20)
+  avatar       String?   @db.NVarChar(10)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now()) @db.DateTime2
+  lastLogin    DateTime? @db.DateTime2
+  auditLogs    AuditLog[]
+  media        Media[]
+  tips         Tip[]
+
+  @@map("aptis_users")
+}
+
+model Setting {
+  id            Int       @id @default(autoincrement())
+  defaultTime   Int       @default(45)
+  shuffle       Boolean   @default(false)
+  allowReview   Boolean   @default(true)
+  theme         String    @default("light") @db.NVarChar(20)
+  language      String    @default("vi") @db.NVarChar(10)
+  notifications Boolean   @default(true)
+  autoSave      Boolean   @default(true)
+  updatedAt     DateTime? @db.DateTime2
+
+  @@map("aptis_settings")
+}
+
+model AuditLog {
+  id        BigInt    @id @default(autoincrement())
+  userId    Int?
+  action    String    @db.NVarChar(100)
+  details   String?   @db.NVarChar(Max)
+  createdAt DateTime  @default(now()) @db.DateTime2
+  user      User?     @relation(fields: [userId], references: [id], onDelete: NoAction)
+
+  @@map("aptis_audit_logs")
+}
+
+model Media {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.NVarChar(255)
+  type      String   @db.NVarChar(30)
+  size      BigInt?
+  url       String   @db.NVarChar(1000)
+  duration  Int?
+  uploaderId Int?
+  createdAt DateTime @default(now()) @db.DateTime2
+  uploader  User?    @relation(fields: [uploaderId], references: [id], onDelete: NoAction)
+
+  @@map("aptis_media")
+}
+
+model Tip {
+  id        Int       @id @default(autoincrement())
+  title     String    @db.NVarChar(255)
+  skill     String    @db.NVarChar(50)
+  content   String    @db.NVarChar(Max)
+  status    String    @default("published") @db.NVarChar(20)
+  priority  String    @default("medium") @db.NVarChar(20)
+  authorId  Int?
+  createdAt DateTime  @default(now()) @db.DateTime2
+  updatedAt DateTime? @db.DateTime2
+  author    User?     @relation(fields: [authorId], references: [id], onDelete: NoAction)
+
+  @@map("aptis_tips")
+}
