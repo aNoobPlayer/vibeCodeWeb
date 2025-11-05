@@ -72,14 +72,17 @@ import {
 } from "lucide-react";
 import type { TestSet, Question, Tip, Media, Activity } from "@shared/schema";
 import { QuestionImportButton } from "@/components/QuestionImportModal";
+import { QuestionFormModal } from "@/components/QuestionFormModal";
 import { GradingModal } from "@/components/GradingModal";
 import { useToast } from "@/hooks/use-toast";
 
 export default function AdminDashboard() {
   const [currentView, setCurrentView] = useState("dashboard");
   const [searchQuery, setSearchQuery] = useState("");
-  const { toast } = useToast();
   const { user, logout } = useAuth();
+  const { data: stats } = useQuery<{ setsCount: number; questionsCount: number }>({
+    queryKey: ["/api/stats"],
+  });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -96,7 +99,7 @@ export default function AdminDashboard() {
         <div className="flex-1 max-w-lg relative">
           <Input
             data-testid="input-global-search"
-            placeholder="Tìm kiếm toàn hệ thống..."
+            placeholder="Search across the platform..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10 bg-gray-50 border-gray-200"
@@ -129,20 +132,20 @@ export default function AdminDashboard() {
               </div>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Tài khoản của tôi</DropdownMenuLabel>
+              <DropdownMenuLabel>My account</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem>
                 <UserCircle className="mr-2 h-4 w-4" />
-                <span>Hồ sơ</span>
+                <span>Profile</span>
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <Settings className="mr-2 h-4 w-4" />
-                <span>Cài đặt</span>
+                <span>Settings</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout} data-testid="button-logout">
                 <LogOut className="mr-2 h-4 w-4" />
-                <span>Đăng xuất</span>
+                <span>Sign out</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -179,9 +182,9 @@ export default function AdminDashboard() {
                 }`}
               >
                 <Layers className="w-5 h-5" />
-                <span className="font-medium">Bộ đề thi</span>
+                <span className="font-medium">Test sets</span>
                 <Badge className="ml-auto bg-gray-700 text-gray-300" data-testid="badge-sets-count">
-                  0
+                  {stats?.setsCount ?? 0}
                 </Badge>
               </Button>
               <Button
@@ -195,9 +198,9 @@ export default function AdminDashboard() {
                 }`}
               >
                 <ClipboardList className="w-5 h-5" />
-                <span className="font-medium">Ngân hàng câu hỏi</span>
+                <span className="font-medium">Question bank</span>
                 <Badge className="ml-auto bg-gray-700 text-gray-300" data-testid="badge-questions-count">
-                  0
+                  {stats?.questionsCount ?? 0}
                 </Badge>
               </Button>
               <Button
@@ -211,7 +214,7 @@ export default function AdminDashboard() {
                 }`}
               >
                 <Pencil className="w-5 h-5" />
-                <span className="font-medium">Chấm điểm</span>
+                <span className="font-medium">Grading</span>
               </Button>
               <Button
                 variant="ghost"
@@ -224,7 +227,7 @@ export default function AdminDashboard() {
                 }`}
               >
                 <Lightbulb className="w-5 h-5" />
-                <span className="font-medium">Mẹo & Hướng dẫn</span>
+                <span className="font-medium">Tips & guides</span>
               </Button>
               <Button
                 variant="ghost"
@@ -237,16 +240,17 @@ export default function AdminDashboard() {
                 }`}
               >
                 <FileAudio className="w-5 h-5" />
-                <span className="font-medium">Thư viện Media</span>
+                <span className="font-medium">Media library</span>
               </Button>
             </div>
 
             {/* System Administration */}
             <div className="space-y-1">
               <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 px-3 mb-3">
-                Quản trị hệ thống
+                System administration
               </div>
-              <button
+              <Button
+                variant="ghost"
                 data-testid="nav-users"
                 onClick={() => setCurrentView("users")}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-all ${
@@ -256,9 +260,10 @@ export default function AdminDashboard() {
                 }`}
               >
                 <Users className="w-5 h-5" />
-                <span className="font-medium">Người dùng</span>
-              </button>
-              <button
+                <span className="font-medium">Users</span>
+              </Button>
+              <Button
+                variant="ghost"
                 data-testid="nav-reports"
                 onClick={() => setCurrentView("reports")}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-all ${
@@ -268,9 +273,10 @@ export default function AdminDashboard() {
                 }`}
               >
                 <PieChart className="w-5 h-5" />
-                <span className="font-medium">Báo cáo & Thống kê</span>
-              </button>
-              <button
+                <span className="font-medium">Reports & analytics</span>
+              </Button>
+              <Button
+                variant="ghost"
                 data-testid="nav-settings"
                 onClick={() => setCurrentView("settings")}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-all ${
@@ -280,8 +286,8 @@ export default function AdminDashboard() {
                 }`}
               >
                 <Settings className="w-5 h-5" />
-                <span className="font-medium">Cài đặt</span>
-              </button>
+                <span className="font-medium">Settings</span>
+              </Button>
             </div>
           </div>
         </aside>
@@ -308,17 +314,17 @@ function DashboardView() {
   });
 
   const kpiData = [
-    { label: "Tổng số bộ đề", value: stats?.setsCount || 0, sublabel: "Đã tạo", testId: "kpi-sets" },
-    { label: "Câu hỏi", value: stats?.questionsCount || 0, sublabel: "Đang hoạt động", testId: "kpi-questions" },
-    { label: "Mẹo học", value: stats?.tipsCount || 0, sublabel: "Đã xuất bản", testId: "kpi-tips" },
-    { label: "Media Files", value: stats?.mediaCount || 0, sublabel: "Audio & Hình ảnh", testId: "kpi-media" },
+    { label: "Total test sets", value: stats?.setsCount || 0, sublabel: "Created", testId: "kpi-sets" },
+    { label: "Questions", value: stats?.questionsCount || 0, sublabel: "Active", testId: "kpi-questions" },
+    { label: "Study tips", value: stats?.tipsCount || 0, sublabel: "Published", testId: "kpi-tips" },
+    { label: "Media files", value: stats?.mediaCount || 0, sublabel: "Audio & images", testId: "kpi-media" },
   ];
 
   return (
     <div className="space-y-8 animate-slideIn">
       <div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
-        <p className="text-gray-600">Tổng quan hệ thống quản lý đề thi APTIS</p>
+        <p className="text-gray-600">Overview of the APTIS management workspace</p>
       </div>
 
       {/* KPI Cards */}
@@ -344,8 +350,8 @@ function DashboardView() {
         <Card className="p-6">
           <div className="flex items-start justify-between mb-6">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Hoạt động gần đây</h3>
-              <p className="text-sm text-gray-500 mt-1">Các thay đổi mới nhất</p>
+              <h3 className="text-lg font-semibold text-gray-900">Recent activity</h3>
+              <p className="text-sm text-gray-500 mt-1">Latest changes</p>
             </div>
             <Button variant="secondary" size="icon" data-testid="button-refresh-activity">
               <RotateCw className="w-4 h-4" />
@@ -356,8 +362,8 @@ function DashboardView() {
 
         <Card className="p-6">
           <div className="mb-6">
-            <h3 className="text-lg font-semibold text-gray-900">Phân bố câu hỏi theo kỹ năng</h3>
-            <p className="text-sm text-gray-500 mt-1">Thống kê ngân hàng câu hỏi</p>
+            <h3 className="text-lg font-semibold text-gray-900">Question distribution by skill</h3>
+            <p className="text-sm text-gray-500 mt-1">Question bank analytics</p>
           </div>
           <SkillDistributionChart />
         </Card>
@@ -365,23 +371,23 @@ function DashboardView() {
 
       {/* Quick Actions */}
       <Card className="p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Thao tác nhanh</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick actions</h3>
         <div className="flex flex-wrap gap-3">
           <Button data-testid="button-create-set" className="gap-2">
             <Plus className="w-4 h-4" />
-            Tạo bộ đề mới
+            Create new test set
           </Button>
           <Button variant="secondary" data-testid="button-create-question" className="gap-2">
             <ClipboardList className="w-4 h-4" />
-            Thêm câu hỏi
+            Add question
           </Button>
           <Button variant="secondary" data-testid="button-create-tip" className="gap-2">
             <Lightbulb className="w-4 h-4" />
-            Viết mẹo học
+            Write study tip
           </Button>
           <Button variant="secondary" data-testid="button-upload-media" className="gap-2">
             <Upload className="w-4 h-4" />
-            Upload Media
+            Upload media
           </Button>
         </div>
       </Card>
@@ -402,7 +408,7 @@ function ActivityFeed() {
     return (
       <div className="text-center py-12 text-gray-400">
         <Clock className="w-10 h-10 mx-auto mb-3" />
-        <p>Chưa có hoạt động nào</p>
+        <p>No activity yet</p>
       </div>
     );
   }
@@ -423,7 +429,7 @@ function ActivityFeed() {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-gray-900">{activity.resourceTitle}</p>
             <p className="text-xs text-gray-500 mt-0.5">
-              {activity.action === "created" ? "Đã tạo" : activity.action === "updated" ? "Đã cập nhật" : "Đã xóa"} •{" "}
+              { activity.action === "created" ? "Created" : activity.action === "updated" ? "Updated" : "Deleted" } -{" "}
               {new Date(activity.timestamp).toLocaleTimeString("vi-VN")}
             </p>
           </div>
@@ -452,7 +458,7 @@ function SkillDistributionChart() {
     return (
       <div className="text-center py-12 text-gray-400">
         <BarChart3 className="w-10 h-10 mx-auto mb-3" />
-        <p>Chưa có dữ liệu</p>
+        <p>No data available</p>
       </div>
     );
   }
@@ -463,7 +469,7 @@ function SkillDistributionChart() {
         <div key={skill.name}>
           <div className="flex justify-between text-sm mb-2">
             <span className="font-medium text-gray-700">{skill.name}</span>
-            <span className="text-gray-500">{skill.count} câu</span>
+            <span className="text-gray-500">{skill.count} questions</span>
           </div>
           <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
             <div
@@ -498,23 +504,23 @@ function TestSetsView() {
   return (
     <div className="space-y-6 animate-slideIn">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Quản lý Bộ đề</h1>
-        <p className="text-gray-600">Tạo, chỉnh sửa và xuất bản các bộ đề thi</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Manage test sets</h1>
+        <p className="text-gray-600">Create, edit and publish exam sets</p>
       </div>
 
       <Card className="p-6">
         <div className="flex flex-wrap gap-3 mb-6">
           <Button data-testid="button-add-set" className="gap-2">
             <Plus className="w-4 h-4" />
-            Thêm bộ đề mới
+            Add test set
           </Button>
           <div className="flex gap-2 ml-auto">
             <Select value={filterSkill} onValueChange={setFilterSkill}>
               <SelectTrigger className="w-40" data-testid="filter-skill">
-                <SelectValue placeholder="Tất cả kỹ năng" />
+                <SelectValue placeholder="All skills" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tất cả kỹ năng</SelectItem>
+                <SelectItem value="all">All skills</SelectItem>
                 <SelectItem value="Reading">Reading</SelectItem>
                 <SelectItem value="Listening">Listening</SelectItem>
                 <SelectItem value="Speaking">Speaking</SelectItem>
@@ -523,17 +529,17 @@ function TestSetsView() {
             </Select>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="w-40" data-testid="filter-status">
-                <SelectValue placeholder="Tất cả trạng thái" />
+                <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tất cả trạng thái</SelectItem>
+                <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="published">Published</SelectItem>
                 <SelectItem value="draft">Draft</SelectItem>
               </SelectContent>
             </Select>
             <Input
               data-testid="input-search-sets"
-              placeholder="Tìm kiếm bộ đề..."
+              placeholder="Search test sets..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-60"
@@ -546,12 +552,12 @@ function TestSetsView() {
             <TableHeader>
               <TableRow className="bg-gray-50">
                 <TableHead className="w-16">#</TableHead>
-                <TableHead>Tên bộ đề</TableHead>
-                <TableHead>Kỹ năng</TableHead>
-                <TableHead>Số câu hỏi</TableHead>
-                <TableHead>Trạng thái</TableHead>
-                <TableHead>Cập nhật lần cuối</TableHead>
-                <TableHead className="w-52">Thao tác</TableHead>
+                <TableHead>Test set name</TableHead>
+                <TableHead>Skill</TableHead>
+                <TableHead>Questions</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Last updated</TableHead>
+                <TableHead className="w-52">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -559,7 +565,7 @@ function TestSetsView() {
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-12 text-gray-400">
                     <FolderOpen className="w-10 h-10 mx-auto mb-3" />
-                    <p>Chưa có bộ đề nào</p>
+                    <p>No test sets found</p>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -568,12 +574,18 @@ function TestSetsView() {
                     <TableCell className="font-medium">{index + 1}</TableCell>
                     <TableCell className="font-medium text-gray-900">{set.title}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className={
-                        set.skill === "Reading" ? "bg-blue-100 text-blue-700" :
-                        set.skill === "Listening" ? "bg-cyan-100 text-cyan-700" :
-                        set.skill === "Speaking" ? "bg-green-100 text-green-700" :
-                        "bg-orange-100 text-orange-700"
-                      }>
+                      <Badge
+                        variant="secondary"
+                        className={
+                          set.skill === "Reading"
+                            ? "bg-blue-100 text-blue-700"
+                            : set.skill === "Listening"
+                              ? "bg-cyan-100 text-cyan-700"
+                              : set.skill === "Speaking"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-orange-100 text-orange-700"
+                        }
+                      >
                         {set.skill}
                       </Badge>
                     </TableCell>
@@ -591,13 +603,23 @@ function TestSetsView() {
                         <Button variant="ghost" size="sm" data-testid={`button-edit-${set.id}`}>
                           <Pencil className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setComposeSet(set)} data-testid={`button-manage-questions-${set.id}`}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setComposeSet(set)}
+                          data-testid={`button-manage-questions-${set.id}`}
+                        >
                           <ClipboardList className="w-4 h-4" />
                         </Button>
                         <Button variant="ghost" size="sm" data-testid={`button-view-${set.id}`}>
                           <Eye className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" data-testid={`button-delete-${set.id}`} className="text-destructive hover:text-destructive">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          data-testid={`button-delete-${set.id}`}
+                          className="text-destructive hover:text-destructive"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
@@ -617,11 +639,18 @@ function TestSetsView() {
 }
 
 // Questions View Component
+type QuestionsResponse = {
+  items: Question[];
+  page: number;
+  size: number;
+  total: number;
+  hasMore: boolean;
+};
+
 function QuestionsView() {
   const [filterSkill, setFilterSkill] = useState("");
   const [filterType, setFilterType] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [page, setPage] = useState(1);
 
   const { data: questions } = useQuery<Question[]>({
     queryKey: ["/api/questions"],
@@ -637,23 +666,23 @@ function QuestionsView() {
   return (
     <div className="space-y-6 animate-slideIn">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Ngân hàng câu hỏi</h1>
-        <p className="text-gray-600">Quản lý tất cả câu hỏi theo kỹ năng và loại</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Question bank</h1>
+        <p className="text-gray-600">Manage questions by skill and type</p>
       </div>
 
       <Card className="p-6">
         <div className="flex flex-wrap gap-3 mb-6">
           <Button data-testid="button-add-question" className="gap-2">
             <Plus className="w-4 h-4" />
-            Thêm câu hỏi mới
+            Add new question
           </Button>
           <div className="flex gap-2 ml-auto">
             <Select value={filterSkill} onValueChange={setFilterSkill}>
               <SelectTrigger className="w-40" data-testid="filter-question-skill">
-                <SelectValue placeholder="Tất cả kỹ năng" />
+                <SelectValue placeholder="All skills" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tất cả kỹ năng</SelectItem>
+                <SelectItem value="all">All skills</SelectItem>
                 <SelectItem value="Reading">Reading</SelectItem>
                 <SelectItem value="Listening">Listening</SelectItem>
                 <SelectItem value="Speaking">Speaking</SelectItem>
@@ -662,19 +691,19 @@ function QuestionsView() {
             </Select>
             <Select value={filterType} onValueChange={setFilterType}>
               <SelectTrigger className="w-48" data-testid="filter-question-type">
-                <SelectValue placeholder="Tất cả loại" />
+                <SelectValue placeholder="All types" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tất cả loại</SelectItem>
-                <SelectItem value="mcq_single">MCQ (1 đáp án)</SelectItem>
-                <SelectItem value="mcq_multi">MCQ (nhiều đáp án)</SelectItem>
-                <SelectItem value="fill_blank">Điền chỗ trống</SelectItem>
+                <SelectItem value="all">All types</SelectItem>
+                <SelectItem value="mcq_single">MCQ (single answer)</SelectItem>
+                <SelectItem value="mcq_multi">MCQ (multiple answers)</SelectItem>
+                <SelectItem value="fill_blank">Fill in the blanks</SelectItem>
                 <SelectItem value="writing_prompt">Writing prompt</SelectItem>
               </SelectContent>
             </Select>
             <Input
               data-testid="input-search-questions"
-              placeholder="Tìm theo tiêu đề, tags..."
+              placeholder="Search by title or tags..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-60"
@@ -687,12 +716,12 @@ function QuestionsView() {
             <TableHeader>
               <TableRow className="bg-gray-50">
                 <TableHead className="w-16">#</TableHead>
-                <TableHead>Tiêu đề câu hỏi</TableHead>
-                <TableHead>Kỹ năng</TableHead>
-                <TableHead>Loại</TableHead>
-                <TableHead>Điểm số</TableHead>
+                <TableHead>Question title</TableHead>
+                <TableHead>Skill</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Score</TableHead>
                 <TableHead>Tags</TableHead>
-                <TableHead className="w-56">Thao tác</TableHead>
+                <TableHead className="w-56">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -700,29 +729,42 @@ function QuestionsView() {
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-12 text-gray-400">
                     <ClipboardList className="w-10 h-10 mx-auto mb-3" />
-                    <p>Chưa có câu hỏi nào</p>
+                    <p>No questions found</p>
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredQuestions.map((question, index) => (
-                  <TableRow key={question.id} data-testid={`question-row-${question.id}`} className="hover:bg-gray-50">
+                  <TableRow
+                    key={question.id}
+                    data-testid={`question-row-${question.id}`}
+                    className="hover:bg-gray-50"
+                  >
                     <TableCell className="font-medium">{index + 1}</TableCell>
                     <TableCell className="font-medium text-gray-900">{question.title}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className={
-                        question.skill === "Reading" ? "bg-blue-100 text-blue-700" :
-                        question.skill === "Listening" ? "bg-cyan-100 text-cyan-700" :
-                        question.skill === "Speaking" ? "bg-green-100 text-green-700" :
-                        "bg-orange-100 text-orange-700"
-                      }>
+                      <Badge
+                        variant="secondary"
+                        className={
+                          question.skill === "Reading"
+                            ? "bg-blue-100 text-blue-700"
+                            : question.skill === "Listening"
+                              ? "bg-cyan-100 text-cyan-700"
+                              : question.skill === "Speaking"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-orange-100 text-orange-700"
+                        }
+                      >
                         {question.skill}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-gray-600">
-                      {question.type === "mcq_single" ? "MCQ (1)" :
-                       question.type === "mcq_multi" ? "MCQ (nhiều)" :
-                       question.type === "fill_blank" ? "Điền chỗ trống" :
-                       "Writing prompt"}
+                      {question.type === "mcq_single"
+                        ? "MCQ (single answer)"
+                        : question.type === "mcq_multi"
+                          ? "MCQ (multiple answers)"
+                          : question.type === "fill_blank"
+                            ? "Fill in the blanks"
+                            : "Writing prompt"}
                     </TableCell>
                     <TableCell className="font-semibold text-primary">{question.points}</TableCell>
                     <TableCell>
@@ -742,7 +784,12 @@ function QuestionsView() {
                         <Button variant="ghost" size="sm" data-testid={`button-view-question-${question.id}`}>
                           <Eye className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" data-testid={`button-delete-question-${question.id}`} className="text-destructive hover:text-destructive">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          data-testid={`button-delete-question-${question.id}`}
+                          className="text-destructive hover:text-destructive"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
@@ -776,21 +823,23 @@ function GradingView() {
   return (
     <div className="space-y-6 animate-slideIn">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Chấm điểm</h1>
-        <p className="text-gray-600">Bài nộp cần chấm Writing/Speaking</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Grading</h1>
+        <p className="text-gray-600">Submissions awaiting Writing/Speaking review</p>
       </div>
 
       <Card className="p-6">
         <div className="flex gap-2 mb-4">
           <Select value={filterSkill} onValueChange={setFilterSkill}>
-            <SelectTrigger className="w-48"><SelectValue placeholder="Tất cả" /></SelectTrigger>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="All" />
+            </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Tất cả</SelectItem>
+              <SelectItem value="">All</SelectItem>
               <SelectItem value="Writing">Writing</SelectItem>
               <SelectItem value="Speaking">Speaking</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="secondary" onClick={() => refetch()}>Làm mới</Button>
+          <Button variant="secondary" onClick={() => refetch()}>Refresh</Button>
         </div>
 
         <div className="rounded-lg border border-gray-200 overflow-hidden">
@@ -802,13 +851,15 @@ function GradingView() {
                 <TableHead>Set</TableHead>
                 <TableHead>Submitted</TableHead>
                 <TableHead>Items</TableHead>
-                <TableHead className="w-40">Thao tác</TableHead>
+                <TableHead className="w-40">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {!queue || queue.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-10 text-gray-500">Không có bài cần chấm</TableCell>
+                  <TableCell colSpan={6} className="text-center py-10 text-gray-500">
+                    No submissions require grading
+                  </TableCell>
                 </TableRow>
               ) : (
                 queue.map((row) => (
@@ -816,10 +867,10 @@ function GradingView() {
                     <TableCell>{row.id}</TableCell>
                     <TableCell>{row.userId}</TableCell>
                     <TableCell>{row.setId}</TableCell>
-                    <TableCell>{row.submitTime ? new Date(row.submitTime).toLocaleString('vi-VN') : '-'}</TableCell>
+                    <TableCell>{row.submitTime ? new Date(row.submitTime).toLocaleString("vi-VN") : "-"}</TableCell>
                     <TableCell>{row.items}</TableCell>
                     <TableCell>
-                      <Button size="sm" onClick={() => setActive(row)}>Chấm</Button>
+                      <Button size="sm" onClick={() => setActive(row)}>Grade</Button>
                     </TableCell>
                   </TableRow>
                 ))
@@ -829,7 +880,16 @@ function GradingView() {
         </div>
       </Card>
 
-      {active && (<GradingModal submission={active} onClose={() => setActive(null)} onDone={() => { setActive(null); refetch(); }} />)}
+      {active && (
+        <GradingModal
+          submission={active}
+          onClose={() => setActive(null)}
+          onDone={() => {
+            setActive(null);
+            refetch();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -852,23 +912,23 @@ function TipsView() {
   return (
     <div className="space-y-6 animate-slideIn">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Mẹo học & Hướng dẫn</h1>
-        <p className="text-gray-600">Tạo nội dung hỗ trợ học tập cho học viên</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Study tips & guides</h1>
+        <p className="text-gray-600">Create learning resources for students</p>
       </div>
 
       <Card className="p-6">
         <div className="flex flex-wrap gap-3 mb-6">
           <Button data-testid="button-add-tip" className="gap-2">
             <Plus className="w-4 h-4" />
-            Thêm mẹo mới
+            Add new tip
           </Button>
           <div className="flex gap-2 ml-auto">
             <Select value={filterSkill} onValueChange={setFilterSkill}>
               <SelectTrigger className="w-40" data-testid="filter-tip-skill">
-                <SelectValue placeholder="Tất cả kỹ năng" />
+                <SelectValue placeholder="All skills" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tất cả kỹ năng</SelectItem>
+                <SelectItem value="all">All skills</SelectItem>
                 <SelectItem value="Reading">Reading</SelectItem>
                 <SelectItem value="Listening">Listening</SelectItem>
                 <SelectItem value="Speaking">Speaking</SelectItem>
@@ -878,7 +938,7 @@ function TipsView() {
             </Select>
             <Input
               data-testid="input-search-tips"
-              placeholder="Tìm kiếm mẹo..."
+              placeholder="Search tips..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-60"
@@ -891,11 +951,11 @@ function TipsView() {
             <TableHeader>
               <TableRow className="bg-gray-50">
                 <TableHead className="w-16">#</TableHead>
-                <TableHead>Tiêu đề</TableHead>
-                <TableHead>Kỹ năng áp dụng</TableHead>
-                <TableHead>Trạng thái</TableHead>
-                <TableHead>Ngày tạo</TableHead>
-                <TableHead className="w-48">Thao tác</TableHead>
+                <TableHead>Title</TableHead>
+                <TableHead>Applicable skill</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Created at</TableHead>
+                <TableHead className="w-48">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -903,7 +963,7 @@ function TipsView() {
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-12 text-gray-400">
                     <Lightbulb className="w-10 h-10 mx-auto mb-3" />
-                    <p>Chưa có mẹo học nào</p>
+                    <p>No tips found</p>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -912,13 +972,20 @@ function TipsView() {
                     <TableCell className="font-medium">{index + 1}</TableCell>
                     <TableCell className="font-medium text-gray-900">{tip.title}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className={
-                        tip.skill === "Reading" ? "bg-blue-100 text-blue-700" :
-                        tip.skill === "Listening" ? "bg-cyan-100 text-cyan-700" :
-                        tip.skill === "Speaking" ? "bg-green-100 text-green-700" :
-                        tip.skill === "Writing" ? "bg-orange-100 text-orange-700" :
-                        "bg-gray-100 text-gray-700"
-                      }>
+                      <Badge
+                        variant="secondary"
+                        className={
+                          tip.skill === "Reading"
+                            ? "bg-blue-100 text-blue-700"
+                            : tip.skill === "Listening"
+                              ? "bg-cyan-100 text-cyan-700"
+                              : tip.skill === "Speaking"
+                                ? "bg-green-100 text-green-700"
+                                : tip.skill === "Writing"
+                                  ? "bg-orange-100 text-orange-700"
+                                  : "bg-gray-100 text-gray-700"
+                        }
+                      >
                         {tip.skill}
                       </Badge>
                     </TableCell>
@@ -938,7 +1005,12 @@ function TipsView() {
                         <Button variant="ghost" size="sm" data-testid={`button-view-tip-${tip.id}`}>
                           <Eye className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" data-testid={`button-delete-tip-${tip.id}`} className="text-destructive hover:text-destructive">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          data-testid={`button-delete-tip-${tip.id}`}
+                          className="text-destructive hover:text-destructive"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
@@ -963,15 +1035,15 @@ function MediaView() {
   return (
     <div className="space-y-6 animate-slideIn">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Thư viện Media</h1>
-        <p className="text-gray-600">Quản lý file audio và hình ảnh cho câu hỏi</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Media library</h1>
+        <p className="text-gray-600">Manage audio and images for questions</p>
       </div>
 
       <Card className="p-6">
         <div className="flex justify-between items-center mb-6">
           <Button data-testid="button-upload-media-file" className="gap-2">
             <Upload className="w-4 h-4" />
-            Upload Media
+            Upload media
           </Button>
           <div className="flex gap-2">
             <Button variant="outline" data-testid="filter-audio" size="sm">
@@ -980,7 +1052,7 @@ function MediaView() {
             </Button>
             <Button variant="outline" data-testid="filter-image" size="sm">
               <Image className="w-4 h-4 mr-2" />
-              Hình ảnh
+              Images
             </Button>
           </div>
         </div>
@@ -988,13 +1060,17 @@ function MediaView() {
         {!mediaFiles || mediaFiles.length === 0 ? (
           <div className="text-center py-20 text-gray-400">
             <FileAudio className="w-14 h-14 mx-auto mb-4" />
-            <p className="text-lg mb-2">Chưa có file media nào</p>
-            <p className="text-sm">Upload audio hoặc hình ảnh để sử dụng trong câu hỏi</p>
+            <p className="text-lg mb-2">No media uploaded</p>
+            <p className="text-sm">Upload audio or images to attach to questions</p>
           </div>
         ) : (
           <div className="grid grid-cols-4 gap-4" data-testid="media-grid">
             {mediaFiles.map((media) => (
-              <Card key={media.id} data-testid={`media-item-${media.id}`} className="p-4 hover:shadow-md transition-shadow">
+              <Card
+                key={media.id}
+                data-testid={`media-item-${media.id}`}
+                className="p-4 hover:shadow-md transition-shadow"
+              >
                 <div className="aspect-square bg-gray-100 rounded-md flex items-center justify-center mb-3">
                   {media.type === "audio" ? (
                     <Volume2 className="w-10 h-10 text-gray-400" />
@@ -1012,7 +1088,12 @@ function MediaView() {
                   <Button variant="ghost" size="sm" className="flex-1" data-testid={`button-view-media-${media.id}`}>
                     <Eye className="w-3 h-3" />
                   </Button>
-                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" data-testid={`button-delete-media-${media.id}`}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    data-testid={`button-delete-media-${media.id}`}
+                  >
                     <Trash2 className="w-3 h-3" />
                   </Button>
                 </div>
@@ -1030,12 +1111,12 @@ function UsersView() {
   return (
     <div className="space-y-6 animate-slideIn">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Người dùng</h1>
-        <p className="text-gray-600">Quản lý tài khoản người dùng và phân quyền</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Users</h1>
+        <p className="text-gray-600">Manage user accounts and permissions</p>
       </div>
       <Card className="p-12 text-center">
         <Users className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-        <p className="text-gray-500">Chức năng quản lý người dùng đang được phát triển</p>
+        <p className="text-gray-500">User management features are under development</p>
       </Card>
     </div>
   );

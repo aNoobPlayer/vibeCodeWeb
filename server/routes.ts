@@ -187,27 +187,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Questions endpoints
   app.get("/api/questions", async (req, res) => {
     try {
-      const { skill, type, q } = req.query as any;
-      const page = Math.max(1, parseInt((req.query.page as string) || '1', 10));
-      const size = Math.max(1, Math.min(200, parseInt((req.query.size as string) || '50', 10)));
+      const { skill, type, q } = req.query as Record<string, string | undefined>;
+      const page = Math.max(1, parseInt((req.query.page as string) || "1", 10));
+      const size = Math.max(1, Math.min(200, parseInt((req.query.size as string) || "50", 10)));
 
       if (process.env.DATABASE_URL) {
         const where: string[] = [];
         const params: any[] = [];
-        if (skill && typeof skill === 'string' && skill !== 'all') { where.push(`q.skill = @p${params.length}`); params.push(skill); }
-        if (type && typeof type === 'string' && type !== 'all') { where.push(`q.[type] = @p${params.length}`); params.push(type); }
-        if (q && typeof q === 'string') { where.push(`(q.title LIKE @p${params.length} OR q.stem LIKE @p${params.length})`); params.push(`%${q}%`); }
-        const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+        if (skill && skill !== "all") {
+          where.push(`q.skill = @p${params.length}`);
+          params.push(skill);
+        }
+        if (type && type !== "all") {
+          where.push(`q.[type] = @p${params.length}`);
+          params.push(type);
+        }
+        if (q) {
+          where.push(`(q.title LIKE @p${params.length} OR q.stem LIKE @p${params.length})`);
+          params.push(`%${q}%`);
+        }
+
+        const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
         const offset = (page - 1) * size;
-        const rows = await query(`
+
+        const rows = await query(
+          `
           SELECT q.id, q.title, q.skill, q.[type], q.stem, q.optionsJson, q.answerKey, q.explain, m.url AS mediaUrl
           FROM dbo.aptis_questions q
           LEFT JOIN dbo.aptis_media m ON m.id = q.mediaId
           ${whereSql}
           ORDER BY q.id DESC
-          OFFSET @p${params.length} ROWS FETCH NEXT @p${params.length+1} ROWS ONLY
-        `, [...params, offset, size]);
-        const data = (rows.recordset || []).map((r: any) => ({
+          OFFSET @p${params.length} ROWS FETCH NEXT @p${params.length + 1} ROWS ONLY
+        `,
+          [...params, offset, size],
+        );
+
+        const totalResult = await query(
+          `
+          SELECT COUNT(*) AS total
+          FROM dbo.aptis_questions q
+          ${whereSql}
+        `,
+          params,
+        );
+
+        const total = totalResult.recordset?.[0]?.total ?? 0;
+        const items = (rows.recordset || []).map((r: any) => ({
           id: String(r.id),
           title: r.title ?? null,
           skill: r.skill,
@@ -220,20 +246,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
           mediaUrl: r.mediaUrl ?? null,
           explanation: r.explain ?? null,
         }));
-        return res.json(data);
+
+        return res.json({
+          items,
+          page,
+          size,
+          total,
+          hasMore: offset + items.length < total,
+        });
       }
 
       // Fallback: in-memory filtering
       let list = await storage.getAllQuestions();
-      if (skill && typeof skill === 'string' && skill !== 'all') list = list.filter(qi => qi.skill === skill);
-      if (type && typeof type === 'string' && type !== 'all') list = list.filter(qi => qi.type === type);
-      if (q && typeof q === 'string') {
-        const qq = q.toLowerCase();
-        list = list.filter(qi => (qi.title || '').toLowerCase().includes(qq) || (qi.content || '').toLowerCase().includes(qq));
+      if (skill && skill !== "all") {
+        list = list.filter((qi) => qi.skill === skill);
       }
+      if (type && type !== "all") {
+        list = list.filter((qi) => qi.type === type);
+      }
+      if (q) {
+        const qq = q.toLowerCase();
+        list = list.filter(
+          (qi) =>
+            (qi.title || "").toLowerCase().includes(qq) ||
+            (qi.content || "").toLowerCase().includes(qq),
+        );
+      }
+
       const start = (page - 1) * size;
       const paged = list.slice(start, start + size);
-      res.json(paged);
+      const total = list.length;
+
+      res.json({
+        items: paged,
+        page,
+        size,
+        total,
+        hasMore: start + paged.length < total,
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

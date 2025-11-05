@@ -5,6 +5,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import fs from 'fs';
 import path from 'path';
 import { query } from "./db";
+import { ensureSqlSchema } from "./bootstrap-schema";
 
 const app = express();
 
@@ -78,6 +79,15 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  if (process.env.DATABASE_URL) {
+    try {
+      await ensureSqlSchema();
+      log('SQL schema validated', 'bootstrap');
+    } catch (err) {
+      log(`Schema bootstrap failed: ${String((err as any)?.message || err)}`, 'bootstrap');
+    }
+  }
+
   const server = await registerRoutes(app);
 
   // Dev bootstrap: ensure at least one admin exists in SQL mode
