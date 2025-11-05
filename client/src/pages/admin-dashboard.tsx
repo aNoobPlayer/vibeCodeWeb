@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { SetCompositionModal } from "@/components/SetCompositionModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card } from "@/components/ui/card";
@@ -69,15 +69,27 @@ import {
   Image,
   LogOut,
   UserCircle,
+  UserPlus,
+  ShieldCheck,
+  Loader2,
 } from "lucide-react";
 import type { TestSet, Question, Tip, Media, Activity } from "@shared/schema";
 import { QuestionImportButton } from "@/components/QuestionImportModal";
-import { QuestionFormModal } from "@/components/QuestionFormModal";
 import { GradingModal } from "@/components/GradingModal";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function AdminDashboard() {
-  const [currentView, setCurrentView] = useState("dashboard");
+  const [currentView, setCurrentView] = useState("sets");
   const [searchQuery, setSearchQuery] = useState("");
   const { user, logout } = useAuth();
   const { data: stats } = useQuery<{ setsCount: number; questionsCount: number }>({
@@ -156,21 +168,11 @@ export default function AdminDashboard() {
         {/* Sidebar */}
         <aside className="sticky top-[73px] h-[calc(100vh-73px)] bg-gradient-to-b from-gray-900 to-gray-800 text-gray-100 p-4 overflow-y-auto">
           <div className="space-y-8">
-            {/* Main Navigation */}
+            {/* Focus Navigation */}
             <div className="space-y-1">
-              <Button
-                variant="ghost"
-                data-testid="nav-dashboard"
-                onClick={() => setCurrentView("dashboard")}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-all ${
-                  currentView === "dashboard"
-                    ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-md"
-                    : "text-gray-300 hover:bg-white/10 hover:text-white hover:translate-x-1"
-                }`}
-              >
-                <TrendingUp className="w-5 h-5" />
-                <span className="font-medium">Dashboard</span>
-              </Button>
+              <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 px-3 mb-2">
+                Focus areas
+              </div>
               <Button
                 variant="ghost"
                 data-testid="nav-sets"
@@ -202,6 +204,25 @@ export default function AdminDashboard() {
                 <Badge className="ml-auto bg-gray-700 text-gray-300" data-testid="badge-questions-count">
                   {stats?.questionsCount ?? 0}
                 </Badge>
+              </Button>
+            </div>
+            {/* Workspace Tools */}
+            <div className="space-y-1 border-t border-white/10 pt-6">
+              <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 px-3 mb-2">
+                Workspace
+              </div>
+              <Button
+                variant="ghost"
+                data-testid="nav-dashboard"
+                onClick={() => setCurrentView("dashboard")}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-all ${
+                  currentView === "dashboard"
+                    ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-md"
+                    : "text-gray-300 hover:bg-white/10 hover:text-white hover:translate-x-1"
+                }`}
+              >
+                <TrendingUp className="w-5 h-5" />
+                <span className="font-medium">Overview</span>
               </Button>
               <Button
                 variant="ghost"
@@ -312,23 +333,48 @@ function DashboardView() {
   const { data: stats } = useQuery<any>({
     queryKey: ["/api/stats"],
   });
+  const { data: testSets } = useQuery<TestSet[]>({
+    queryKey: ["/api/test-sets"],
+  });
+  const { data: questions } = useQuery<Question[]>({
+    queryKey: ["/api/questions"],
+  });
 
   const kpiData = [
-    { label: "Total test sets", value: stats?.setsCount || 0, sublabel: "Created", testId: "kpi-sets" },
-    { label: "Questions", value: stats?.questionsCount || 0, sublabel: "Active", testId: "kpi-questions" },
-    { label: "Study tips", value: stats?.tipsCount || 0, sublabel: "Published", testId: "kpi-tips" },
-    { label: "Media files", value: stats?.mediaCount || 0, sublabel: "Audio & images", testId: "kpi-media" },
+    { label: "Total test sets", value: stats?.setsCount || 0, sublabel: "Ready to assign", testId: "kpi-sets" },
+    { label: "Question bank items", value: stats?.questionsCount || 0, sublabel: "Curated questions", testId: "kpi-questions" },
   ];
+  const recentSets = useMemo(() => (testSets ? testSets.slice(0, 4) : []), [testSets]);
+  const recentQuestions = useMemo(() => (questions ? questions.slice(0, 5) : []), [questions]);
+
+  const formatQuestionType = (type: Question["type"]) => {
+    switch (type) {
+      case "mcq_single":
+        return "MCQ (single answer)";
+      case "mcq_multi":
+        return "MCQ (multiple answers)";
+      case "fill_blank":
+        return "Fill in the blanks";
+      case "writing_prompt":
+        return "Writing prompt";
+      case "speaking_prompt":
+        return "Speaking prompt";
+      default:
+        return type;
+    }
+  };
 
   return (
     <div className="space-y-8 animate-slideIn">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
-        <p className="text-gray-600">Overview of the APTIS management workspace</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Assessment content</h1>
+        <p className="text-gray-600">
+          Monitor your test sets and question bank in one place to keep exam materials aligned.
+        </p>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {kpiData.map((kpi) => (
           <Card
             key={kpi.testId}
@@ -336,7 +382,7 @@ function DashboardView() {
             className="relative overflow-hidden hover:-translate-y-1 transition-all duration-300 hover:shadow-lg"
           >
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-accent"></div>
-            <div className="p-6 text-center">
+            <div className="p-6">
               <div className="text-sm font-medium text-gray-600 mb-1">{kpi.label}</div>
               <div className="text-4xl font-bold text-primary my-3">{kpi.value}</div>
               <div className="text-xs text-gray-500">{kpi.sublabel}</div>
@@ -345,31 +391,6 @@ function DashboardView() {
         ))}
       </div>
 
-      {/* Activity and Charts */}
-      <div className="grid grid-cols-2 gap-6">
-        <Card className="p-6">
-          <div className="flex items-start justify-between mb-6">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">Recent activity</h3>
-              <p className="text-sm text-gray-500 mt-1">Latest changes</p>
-            </div>
-            <Button variant="secondary" size="icon" data-testid="button-refresh-activity">
-              <RotateCw className="w-4 h-4" />
-            </Button>
-          </div>
-          <ActivityFeed />
-        </Card>
-
-        <Card className="p-6">
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold text-gray-900">Question distribution by skill</h3>
-            <p className="text-sm text-gray-500 mt-1">Question bank analytics</p>
-          </div>
-          <SkillDistributionChart />
-        </Card>
-      </div>
-
-      {/* Quick Actions */}
       <Card className="p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick actions</h3>
         <div className="flex flex-wrap gap-3">
@@ -381,18 +402,92 @@ function DashboardView() {
             <ClipboardList className="w-4 h-4" />
             Add question
           </Button>
-          <Button variant="secondary" data-testid="button-create-tip" className="gap-2">
-            <Lightbulb className="w-4 h-4" />
-            Write study tip
-          </Button>
-          <Button variant="secondary" data-testid="button-upload-media" className="gap-2">
-            <Upload className="w-4 h-4" />
-            Upload media
-          </Button>
+          <div>
+            <QuestionImportButton />
+          </div>
         </div>
       </Card>
-      <div className="flex justify-end mt-4">
-        <QuestionImportButton />
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <Card className="p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Latest test sets</h3>
+              <p className="text-sm text-gray-500 mt-1">Recently updated collections</p>
+            </div>
+          </div>
+          {recentSets.length === 0 ? (
+            <div className="text-sm text-gray-500">No test sets yet. Create one to get started.</div>
+          ) : (
+            <ul className="space-y-4">
+              {recentSets.map((set) => (
+                <li key={set.id} className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-medium text-gray-900">{set.title}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {set.skill} · Updated {new Date(set.updatedAt).toLocaleDateString("vi-VN")}
+                    </p>
+                  </div>
+                  <Badge variant={set.status === "published" ? "default" : "secondary"}>
+                    {set.status === "published" ? "Published" : "Draft"}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Recent question bank entries</h3>
+              <p className="text-sm text-gray-500 mt-1">Fresh content across skills</p>
+            </div>
+          </div>
+          {recentQuestions.length === 0 ? (
+            <div className="text-sm text-gray-500">No questions found. Add a question to populate the bank.</div>
+          ) : (
+            <ul className="space-y-4">
+              {recentQuestions.map((question) => (
+                <li key={question.id} className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-medium text-gray-900">{question.title}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {question.skill} · {formatQuestionType(question.type)}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="text-xs">
+                    {question.points} pts
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
+
+      {/* Activity and Charts */}
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <Card className="p-6">
+          <div className="flex items-start justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Recent activity</h3>
+              <p className="text-sm text-gray-500 mt-1">Latest changes across sets and questions</p>
+            </div>
+            <Button variant="secondary" size="icon" data-testid="button-refresh-activity">
+              <RotateCw className="w-4 h-4" />
+            </Button>
+          </div>
+          <ActivityFeed />
+        </Card>
+
+        <Card className="p-6">
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-gray-900">Question distribution by skill</h3>
+            <p className="text-sm text-gray-500 mt-1">Track balance across the bank</p>
+          </div>
+          <SkillDistributionChart />
+        </Card>
       </div>
     </div>
   );
@@ -515,7 +610,10 @@ function TestSetsView() {
             Add test set
           </Button>
           <div className="flex gap-2 ml-auto">
-            <Select value={filterSkill} onValueChange={setFilterSkill}>
+            <Select
+              value={filterSkill || "all"}
+              onValueChange={(value) => setFilterSkill(value === "all" ? "" : value)}
+            >
               <SelectTrigger className="w-40" data-testid="filter-skill">
                 <SelectValue placeholder="All skills" />
               </SelectTrigger>
@@ -527,7 +625,10 @@ function TestSetsView() {
                 <SelectItem value="Writing">Writing</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <Select
+              value={filterStatus || "all"}
+              onValueChange={(value) => setFilterStatus(value === "all" ? "" : value)}
+            >
               <SelectTrigger className="w-40" data-testid="filter-status">
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
@@ -677,7 +778,10 @@ function QuestionsView() {
             Add new question
           </Button>
           <div className="flex gap-2 ml-auto">
-            <Select value={filterSkill} onValueChange={setFilterSkill}>
+            <Select
+              value={filterSkill || "all"}
+              onValueChange={(value) => setFilterSkill(value === "all" ? "" : value)}
+            >
               <SelectTrigger className="w-40" data-testid="filter-question-skill">
                 <SelectValue placeholder="All skills" />
               </SelectTrigger>
@@ -689,7 +793,10 @@ function QuestionsView() {
                 <SelectItem value="Writing">Writing</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={filterType} onValueChange={setFilterType}>
+            <Select
+              value={filterType || "all"}
+              onValueChange={(value) => setFilterType(value === "all" ? "" : value)}
+            >
               <SelectTrigger className="w-48" data-testid="filter-question-type">
                 <SelectValue placeholder="All types" />
               </SelectTrigger>
@@ -1106,18 +1213,439 @@ function MediaView() {
   );
 }
 
-// Users View Component (placeholder)
+type AdminUserSummary = {
+  id: string;
+  username: string;
+  role: "admin" | "student";
+  isActive?: boolean;
+  createdAt?: string | null;
+  lastLogin?: string | null;
+};
+
 function UsersView() {
+  const { toast } = useToast();
+  const { user: currentUser } = useAuth();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<AdminUserSummary | null>(null);
+  const [newUser, setNewUser] = useState<{ username: string; password: string; role: "admin" | "student" }>(
+    {
+      username: "",
+      password: "",
+      role: "student",
+    },
+  );
+
+  const { data: users, isLoading } = useQuery<AdminUserSummary[]>({
+    queryKey: ["/api/admin/users"],
+  });
+
+  const createUserMutation = useMutation<
+    AdminUserSummary,
+    Error,
+    { username: string; password: string; role: "admin" | "student" }
+  >({
+    mutationFn: async (payload) => {
+      const res = await apiRequest("POST", "/api/admin/users", payload);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({
+        title: "Tạo tài khoản thành công",
+        description: "Người dùng mới đã được thêm vào hệ thống.",
+      });
+      setIsCreateOpen(false);
+      setNewUser({ username: "", password: "", role: "student" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Không thể tạo tài khoản",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateRoleMutation = useMutation<
+    AdminUserSummary,
+    Error,
+    { id: string; role: "admin" | "student"; username: string }
+  >({
+    mutationFn: async (payload) => {
+      const res = await apiRequest("PATCH", `/api/admin/users/${payload.id}`, { role: payload.role });
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({
+        title: "Cập nhật quyền thành công",
+        description: `${variables.username} đã được chuyển sang nhóm ${
+          variables.role === "admin" ? "quản trị viên" : "học viên"
+        }`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Không thể cập nhật quyền",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteUserMutation = useMutation<void, Error, { id: string; username: string }>({
+    mutationFn: async (payload) => {
+      await apiRequest("DELETE", `/api/admin/users/${payload.id}`);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      setUserToDelete(null);
+      toast({
+        title: "Đã xóa người dùng",
+        description: `${variables.username} đã bị xóa khỏi hệ thống.`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Không thể xóa người dùng",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const filteredUsers = useMemo(() => {
+    if (!users) return [];
+    return users
+      .filter((item) => {
+        if (roleFilter !== "all" && item.role !== roleFilter) return false;
+        if (searchQuery && !item.username.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const createdA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return createdB - createdA;
+      });
+  }, [users, roleFilter, searchQuery]);
+
+  const totalUsers = users?.length ?? 0;
+  const adminCount = users?.filter((user) => user.role === "admin").length ?? 0;
+  const studentCount = users?.filter((user) => user.role === "student").length ?? 0;
+  const activeCount = users?.filter((user) => user.isActive !== false).length ?? 0;
+
+  const pendingRoleUserId = updateRoleMutation.variables?.id;
+  const pendingDeleteUserId = deleteUserMutation.variables?.id;
+
+  const handleCreateUser = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!newUser.username.trim()) {
+      toast({
+        title: "Tên đăng nhập không hợp lệ",
+        description: "Vui lòng nhập tên đăng nhập.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (newUser.password.trim().length < 6) {
+      toast({
+        title: "Mật khẩu quá ngắn",
+        description: "Mật khẩu cần có tối thiểu 6 ký tự.",
+        variant: "destructive",
+      });
+      return;
+    }
+    createUserMutation.mutate({ ...newUser });
+  };
+
+  const handleRoleChange = (user: AdminUserSummary, role: "admin" | "student") => {
+    if (role === user.role) return;
+    updateRoleMutation.mutate({ id: user.id, role, username: user.username });
+  };
+
+  const handleConfirmDelete = () => {
+    if (!userToDelete) return;
+    deleteUserMutation.mutate({ id: userToDelete.id, username: userToDelete.username });
+  };
+
   return (
     <div className="space-y-6 animate-slideIn">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Users</h1>
-        <p className="text-gray-600">Manage user accounts and permissions</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Người dùng</h1>
+        <p className="text-gray-600">Quản lý tài khoản, phân quyền và trạng thái hoạt động</p>
       </div>
-      <Card className="p-12 text-center">
-        <Users className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-        <p className="text-gray-500">User management features are under development</p>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="p-5 bg-white shadow-sm border border-primary/10" data-testid="user-stat-total">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-gray-500">Tổng tài khoản</p>
+              <p className="text-3xl font-bold text-gray-900 mt-2">{totalUsers}</p>
+            </div>
+            <Users className="w-10 h-10 text-primary/80" />
+          </div>
+        </Card>
+        <Card className="p-5 bg-white shadow-sm border border-indigo-100" data-testid="user-stat-admins">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-gray-500">Quản trị viên</p>
+              <p className="text-3xl font-bold text-primary mt-2">{adminCount}</p>
+            </div>
+            <ShieldCheck className="w-10 h-10 text-primary" />
+          </div>
+        </Card>
+        <Card className="p-5 bg-white shadow-sm border border-cyan-100" data-testid="user-stat-students">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-gray-500">Học viên</p>
+              <p className="text-3xl font-bold text-cyan-600 mt-2">{studentCount}</p>
+            </div>
+            <GraduationCap className="w-10 h-10 text-cyan-500" />
+          </div>
+        </Card>
+        <Card className="p-5 bg-white shadow-sm border border-emerald-100" data-testid="user-stat-active">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-gray-500">Đang hoạt động</p>
+              <p className="text-3xl font-bold text-emerald-600 mt-2">{activeCount}</p>
+            </div>
+            <BarChart3 className="w-10 h-10 text-emerald-500" />
+          </div>
+        </Card>
+      </div>
+
+      <Card className="p-6">
+        <div className="flex flex-wrap items-center gap-3 mb-6">
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-invite-user" className="gap-2">
+                <UserPlus className="w-4 h-4" />
+                Thêm tài khoản
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Thêm người dùng mới</DialogTitle>
+                <DialogDescription>
+                  Nhập thông tin tài khoản để cấp quyền truy cập vào hệ thống.
+                </DialogDescription>
+              </DialogHeader>
+              <form className="space-y-4" onSubmit={handleCreateUser}>
+                <div className="space-y-1">
+                  <Label htmlFor="new-username">Tên đăng nhập</Label>
+                  <Input
+                    id="new-username"
+                    value={newUser.username}
+                    onChange={(event) => setNewUser((prev) => ({ ...prev, username: event.target.value }))}
+                    placeholder="vd: giangvien01"
+                    data-testid="input-new-username"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="new-password">Mật khẩu tạm</Label>
+                  <Input
+                    id="new-password"
+                    type="password"
+                    value={newUser.password}
+                    onChange={(event) => setNewUser((prev) => ({ ...prev, password: event.target.value }))}
+                    placeholder="Tối thiểu 6 ký tự"
+                    data-testid="input-new-password"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Phân quyền</Label>
+                  <Select
+                    value={newUser.role}
+                    onValueChange={(value: "admin" | "student") =>
+                      setNewUser((prev) => ({ ...prev, role: value }))
+                    }
+                  >
+                    <SelectTrigger data-testid="select-new-role">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="student">Học viên</SelectItem>
+                      <SelectItem value="admin">Quản trị viên</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
+                    Hủy
+                  </Button>
+                  <Button
+                    type="submit"
+                    data-testid="button-create-user"
+                    disabled={createUserMutation.isPending}
+                  >
+                    {createUserMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <UserPlus className="w-4 h-4 mr-2" />
+                    )}
+                    Tạo tài khoản
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          <div className="flex gap-2 ml-auto flex-1 justify-end">
+            <Select value={roleFilter} onValueChange={setRoleFilter}>
+              <SelectTrigger className="w-44" data-testid="filter-user-role">
+                <SelectValue placeholder="Tất cả quyền" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả quyền</SelectItem>
+                <SelectItem value="admin">Quản trị viên</SelectItem>
+                <SelectItem value="student">Học viên</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input
+              placeholder="Tìm kiếm theo tên đăng nhập..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              className="w-56"
+              data-testid="input-search-users"
+            />
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-gray-200 overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gray-50">
+                <TableHead className="w-16">#</TableHead>
+                <TableHead>Tên đăng nhập</TableHead>
+                <TableHead>Quyền</TableHead>
+                <TableHead>Trạng thái</TableHead>
+                <TableHead>Ngày tạo</TableHead>
+                <TableHead>Hoạt động cuối</TableHead>
+                <TableHead className="w-48 text-right">Thao tác</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-12 text-gray-400">
+                    Đang tải danh sách người dùng...
+                  </TableCell>
+                </TableRow>
+              ) : filteredUsers.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-12 text-gray-400">
+                    <Users className="w-10 h-10 mx-auto mb-3" />
+                    <p>Không tìm thấy người dùng phù hợp</p>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredUsers.map((userItem, index) => {
+                  const createdAtLabel = userItem.createdAt
+                    ? new Date(userItem.createdAt).toLocaleDateString("vi-VN")
+                    : "--";
+                  const lastLoginLabel = userItem.lastLogin
+                    ? new Date(userItem.lastLogin).toLocaleString("vi-VN")
+                    : "Chưa cập nhật";
+                  const isSelf = currentUser?.id === userItem.id;
+
+                  return (
+                    <TableRow key={userItem.id} data-testid={`user-row-${userItem.id}`} className="hover:bg-gray-50">
+                      <TableCell className="font-medium">{index + 1}</TableCell>
+                      <TableCell className="font-medium text-gray-900">{userItem.username}</TableCell>
+                      <TableCell>
+                        <Select
+                          value={userItem.role}
+                          onValueChange={(value: "admin" | "student") =>
+                            handleRoleChange(userItem, value)
+                          }
+                          disabled={
+                            updateRoleMutation.isPending && pendingRoleUserId === userItem.id
+                          }
+                          data-testid={`select-user-role-${userItem.id}`}
+                        >
+                          <SelectTrigger className="w-40">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="admin">Quản trị viên</SelectItem>
+                            <SelectItem value="student">Học viên</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={userItem.isActive === false ? "secondary" : "default"}
+                          className={
+                            userItem.isActive === false
+                              ? "bg-gray-200 text-gray-600"
+                              : "bg-emerald-100 text-emerald-700"
+                          }
+                        >
+                          {userItem.isActive === false ? "Tạm khóa" : "Hoạt động"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-500">{createdAtLabel}</TableCell>
+                      <TableCell className="text-sm text-gray-500">{lastLoginLabel}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setUserToDelete(userItem)}
+                            disabled={
+                              isSelf ||
+                              (deleteUserMutation.isPending && pendingDeleteUserId === userItem.id)
+                            }
+                            data-testid={`button-delete-user-${userItem.id}`}
+                          >
+                            {deleteUserMutation.isPending && pendingDeleteUserId === userItem.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </Card>
+
+      <AlertDialog open={!!userToDelete} onOpenChange={(open) => (!open ? setUserToDelete(null) : null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xóa người dùng</AlertDialogTitle>
+            <AlertDialogDescription>
+              Hành động này sẽ xóa vĩnh viễn tài khoản {userToDelete?.username}. Bạn không thể hoàn tác.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-white hover:bg-destructive/90"
+              data-testid="confirm-delete-user"
+              disabled={deleteUserMutation.isPending}
+            >
+              {deleteUserMutation.isPending ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4 mr-2" />
+              )}
+              Xóa tài khoản
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

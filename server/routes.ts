@@ -1,7 +1,14 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertTestSetSchema, insertQuestionSchema, insertTipSchema, insertMediaSchema } from "@shared/schema";
+import {
+  insertTestSetSchema,
+  insertQuestionSchema,
+  insertTipSchema,
+  insertMediaSchema,
+  insertUserSchema,
+  type User,
+} from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
 import { z } from "zod";
 import { query } from "./db";
@@ -27,6 +34,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     next();
   }
+
+  const mapUserResponse = (user: User) => ({
+    id: user.id,
+    username: user.username,
+    role: user.role,
+    isActive: user.isActive,
+    createdAt: user.createdAt ? new Date(user.createdAt).toISOString() : null,
+    lastLogin: user.lastLogin ? new Date(user.lastLogin).toISOString() : null,
+  });
   // Health endpoint
   app.get("/api/health", async (_req, res) => {
     try {
@@ -100,6 +116,104 @@ export async function registerRoutes(app: Express): Promise<Server> {
       username: user.username,
       role: user.role,
     });
+  });
+
+  // Admin user management endpoints
+  app.get("/api/admin/users", requireAdmin, async (_req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      res.json(users.map(mapUserResponse));
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/users", requireAdmin, async (req, res) => {
+    try {
+      const parsed = insertUserSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: fromZodError(parsed.error).message });
+      }
+
+      const exists = await storage.getUserByUsername(parsed.data.username);
+      if (exists) {
+        return res.status(409).json({ error: "Username already exists" });
+      }
+
+      const created = await storage.createUser(parsed.data);
+      await storage.createActivity({
+        action: "created",
+        resourceType: "user",
+        resourceTitle: created.username,
+      });
+
+      res.status(201).json(mapUserResponse(created));
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/admin/users/:id", requireAdmin, async (req, res) => {
+    try {
+      const parsed = insertUserSchema.partial().safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: fromZodError(parsed.error).message });
+      }
+
+      if (Object.keys(parsed.data).length === 0) {
+        return res.status(400).json({ error: "No fields to update" });
+      }
+
+      if (parsed.data.username) {
+        const exists = await storage.getUserByUsername(parsed.data.username);
+        if (exists && exists.id !== req.params.id) {
+          return res.status(409).json({ error: "Username already exists" });
+        }
+      }
+
+      const updated = await storage.updateUser(req.params.id, parsed.data);
+      if (!updated) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      await storage.createActivity({
+        action: "updated",
+        resourceType: "user",
+        resourceTitle: updated.username,
+      });
+
+      res.json(mapUserResponse(updated));
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/admin/users/:id", requireAdmin, async (req, res) => {
+    try {
+      if (String(req.session.userId) === req.params.id) {
+        return res.status(400).json({ error: "Cannot delete current session user" });
+      }
+
+      const existing = await storage.getUser(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const success = await storage.deleteUser(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      await storage.createActivity({
+        action: "deleted",
+        resourceType: "user",
+        resourceTitle: existing.username,
+      });
+
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
   });
 
   // Stats endpoints

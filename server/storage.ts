@@ -20,6 +20,9 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  getAllUsers(): Promise<User[]>;
+  updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined>;
+  deleteUser(id: string): Promise<boolean>;
 
   // Test Set methods
   getAllTestSets(): Promise<TestSet[]>;
@@ -222,13 +225,47 @@ export class MemStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
-    const user: User = { 
-      ...insertUser, 
+    const now = new Date();
+    const user: User = {
+      ...insertUser,
       id,
-      role: insertUser.role || "student"
-    };
+      role: insertUser.role || "student",
+      avatar: insertUser.avatar ?? null,
+      isActive: insertUser.isActive ?? true,
+      createdAt: now,
+      lastLogin: null,
+    } as User;
     this.users.set(id, user);
     return user;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return Array.from(this.users.values()).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async updateUser(id: string, update: Partial<InsertUser>): Promise<User | undefined> {
+    const existing = this.users.get(id);
+    if (!existing) return undefined;
+
+    const updated: User = {
+      ...existing,
+      ...update,
+      role: update.role ?? existing.role,
+      avatar: update.avatar ?? existing.avatar,
+      isActive: update.isActive ?? existing.isActive,
+      lastLogin: existing.lastLogin,
+    } as User;
+
+    if (!update.password) {
+      updated.password = existing.password;
+    }
+
+    this.users.set(id, updated);
+    return updated;
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    return this.users.delete(id);
   }
 
   // Test Set methods
@@ -550,7 +587,7 @@ class SqlStorage implements IStorage {
   async getUser(id: string) {
     const idNum = parseInt(id, 10);
     const result = await query(
-      `SELECT id, email, passwordHash, role FROM dbo.aptis_users WHERE id = @p0`,
+      `SELECT id, email, passwordHash, role, avatar, isActive, createdAt, lastLogin FROM dbo.aptis_users WHERE id = @p0`,
       [idNum]
     );
     const row = result.recordset?.[0];
@@ -560,12 +597,16 @@ class SqlStorage implements IStorage {
       username: row.email,
       password: row.passwordHash,
       role: row.role ?? "student",
+      avatar: row.avatar ?? null,
+      isActive: row.isActive ?? true,
+      createdAt: row.createdAt ?? new Date(),
+      lastLogin: row.lastLogin ?? null,
     } as User;
   }
 
   async getUserByUsername(username: string) {
     const result = await query(
-      `SELECT TOP 1 id, email, passwordHash, role FROM dbo.aptis_users WHERE email = @p0 OR name = @p0`,
+      `SELECT TOP 1 id, email, passwordHash, role, avatar, isActive, createdAt, lastLogin FROM dbo.aptis_users WHERE email = @p0 OR name = @p0`,
       [username]
     );
     const row = result.recordset?.[0];
@@ -575,6 +616,10 @@ class SqlStorage implements IStorage {
       username: row.email,
       password: row.passwordHash,
       role: row.role ?? "student",
+      avatar: row.avatar ?? null,
+      isActive: row.isActive ?? true,
+      createdAt: row.createdAt ?? new Date(),
+      lastLogin: row.lastLogin ?? null,
     } as User;
   }
 
@@ -585,12 +630,80 @@ class SqlStorage implements IStorage {
     const passwordHash = insertUser.password; // NOTE: plaintext for now; replace with hash later.
     const result = await query(
       `INSERT INTO dbo.aptis_users(email, passwordHash, name, role)
-       OUTPUT INSERTED.id
+       OUTPUT INSERTED.id, INSERTED.email, INSERTED.passwordHash, INSERTED.role, INSERTED.avatar, INSERTED.isActive, INSERTED.createdAt, INSERTED.lastLogin
        VALUES(@p0, @p1, @p2, @p3)`,
       [email, passwordHash, name, role]
     );
-    const id = String(result.recordset[0].id);
-    return { id, username: email, password: passwordHash, role } as User;
+    const row = result.recordset[0];
+    return {
+      id: String(row.id),
+      username: row.email,
+      password: row.passwordHash,
+      role: row.role ?? "student",
+      avatar: row.avatar ?? null,
+      isActive: row.isActive ?? true,
+      createdAt: row.createdAt ?? new Date(),
+      lastLogin: row.lastLogin ?? null,
+    } as User;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    const result = await query(
+      `SELECT id, email, passwordHash, role, avatar, isActive, createdAt, lastLogin FROM dbo.aptis_users ORDER BY createdAt DESC`
+    );
+    return (result.recordset || []).map((row: any) => ({
+      id: String(row.id),
+      username: row.email,
+      password: row.passwordHash,
+      role: row.role ?? "student",
+      avatar: row.avatar ?? null,
+      isActive: row.isActive ?? true,
+      createdAt: row.createdAt ?? new Date(),
+      lastLogin: row.lastLogin ?? null,
+    } as User));
+  }
+
+  async updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined> {
+    const idNum = parseInt(id, 10);
+    const fields: string[] = [];
+    const params: any[] = [];
+
+    if (user.username !== undefined) {
+      fields.push(`email = @p${params.length}`);
+      params.push(user.username);
+      fields.push(`name = @p${params.length}`);
+      params.push(user.username);
+    }
+    if (user.password !== undefined) {
+      fields.push(`passwordHash = @p${params.length}`);
+      params.push(user.password);
+    }
+    if (user.role !== undefined) {
+      fields.push(`role = @p${params.length}`);
+      params.push(user.role);
+    }
+    if (user.avatar !== undefined) {
+      fields.push(`avatar = @p${params.length}`);
+      params.push(user.avatar);
+    }
+    if (user.isActive !== undefined) {
+      fields.push(`isActive = @p${params.length}`);
+      params.push(user.isActive ? 1 : 0);
+    }
+
+    if (fields.length === 0) {
+      return this.getUser(id);
+    }
+
+    const setClause = fields.join(', ');
+    await query(`UPDATE dbo.aptis_users SET ${setClause} WHERE id = @p${params.length}`, [...params, idNum]);
+    return this.getUser(id);
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    const idNum = parseInt(id, 10);
+    const result = await query(`DELETE FROM dbo.aptis_users WHERE id = @p0`, [idNum]);
+    return (result.rowsAffected?.[0] ?? 0) > 0;
   }
 
   // Test Sets
