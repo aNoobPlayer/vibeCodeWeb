@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,11 @@ interface QuestionFormModalProps {
 export function QuestionFormModal({ open, onOpenChange, question }: QuestionFormModalProps) {
   const { toast } = useToast();
   const isEdit = !!question;
+
+  const { data: mediaList } = useQuery<any[]>({
+    queryKey: ["/api/media"],
+    enabled: isEdit,
+  });
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -118,6 +123,44 @@ export function QuestionFormModal({ open, onOpenChange, question }: QuestionForm
                 </FormItem>
               )}
             />
+
+            {isEdit && (
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-3">
+                  <FormItem>
+                    <FormLabel>Attach Media</FormLabel>
+                    <FormControl>
+                      <select
+                        data-testid="select-question-media"
+                        className="w-full h-10 border rounded px-3"
+                        defaultValue=""
+                        onChange={async (e)=> {
+                          const mediaId = e.currentTarget.value;
+                          if (!mediaId) return;
+                          try {
+                            const res = await fetch(`/api/admin/questions/${question?.id}/media`, {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              credentials: "include",
+                              body: JSON.stringify({ mediaId }),
+                            });
+                            if (!res.ok) throw new Error(await res.text());
+                            toast({ title: "Media attached", description: "Linked to question." });
+                          } catch (e: any) {
+                            toast({ title: "Error", description: e.message || "Failed to attach", variant: "destructive" });
+                          }
+                        }}
+                      >
+                        <option value="">-- Select media to attach --</option>
+                        {mediaList?.map((m) => (
+                          <option key={m.id} value={m.id}>{m.filename || m.name || m.url}</option>
+                        ))}
+                      </select>
+                    </FormControl>
+                  </FormItem>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-3 gap-4">
               <FormField

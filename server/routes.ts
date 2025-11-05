@@ -5,6 +5,8 @@ import { insertTestSetSchema, insertQuestionSchema, insertTipSchema, insertMedia
 import { fromZodError } from "zod-validation-error";
 import { z } from "zod";
 import { query } from "./db";
+import multer from 'multer';
+import path from 'path';
 
 const loginSchema = z.object({
   username: z.string().min(1),
@@ -862,6 +864,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     a.forEach((x) => { if (!b.has(x)) ok = false; });
     return ok;
   }
+
+  // ===================== Admin: Media Upload & Attach =====================
+  const uploadDir = path.resolve(import.meta.dirname, '..', 'uploads');
+  const storageM = multer.diskStorage({
+    destination: (_req: any, _file: any, cb: any) => cb(null, uploadDir),
+    filename: (_req: any, file: any, cb: any) => {
+      const ts = Date.now();
+      const safe = file.originalname.replace(/[^a-zA-Z0-9_.-]/g, '_');
+      cb(null, `${ts}_${safe}`);
+    },
+  });
+  const upload = multer({ storage: storageM });
+
+  app.post('/api/admin/media/upload', requireAdmin, upload.single('file'), async (req: any, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: 'Missing file' });
+      const { originalname, mimetype, filename, size } = req.file;
+      const type = mimetype.startsWith('audio') ? 'audio' : mimetype.startsWith('image') ? 'image' : 'file';
+      const url = `/uploads/${filename}`;
+
+      if (process.env.DATABASE_URL) {
+        const ins = await query(`INSERT INTO dbo.aptis_media(name, [type], url, [size]) OUTPUT INSERTED.id VALUES(@p0, @p1, @p2, @p3)`, [originalname, type, url, size]);
+        return res.status(201).json({ id: String(ins.recordset[0].id), filename: originalname, type, url, size });
+      } else {
+        return res.status(201).json({ id: filename, filename: originalname, type, url, size });
+      }
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch('/api/admin/questions/:id/media', requireAdmin, async (req, res) => {
+    try {
+      const qid = parseInt(req.params.id, 10);
+      const { mediaId } = req.body as any;
+      if (!mediaId) return res.status(400).json({ error: 'mediaId required' });
+      if (process.env.DATABASE_URL) {
+        await query(`UPDATE dbo.aptis_questions SET mediaId = @p0 WHERE id = @p1`, [parseInt(mediaId, 10), qid]);
+        return res.json({ message: 'attached' });
+      } else {
+        return res.json({ message: 'noop (memory mode)' });
+      }
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
 
   return httpServer;
 }

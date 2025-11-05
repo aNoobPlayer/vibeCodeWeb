@@ -621,6 +621,7 @@ function QuestionsView() {
   const [filterSkill, setFilterSkill] = useState("");
   const [filterType, setFilterType] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
 
   const { data: questions } = useQuery<Question[]>({
     queryKey: ["/api/questions"],
