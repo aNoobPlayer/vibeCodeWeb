@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { SetCompositionModal } from "@/components/SetCompositionModal";
+import { QuestionFormModal } from "@/components/QuestionFormModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -749,18 +751,54 @@ type QuestionsResponse = {
 };
 
 function QuestionsView() {
-  const [filterSkill, setFilterSkill] = useState("");
-  const [filterType, setFilterType] = useState("");
+  const [filterSkill, setFilterSkill] = useState("all");
+  const [filterType, setFilterType] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [questionModalOpen, setQuestionModalOpen] = useState(false);
+  const [selectedQuestion, setSelectedQuestion] = useState<Question | undefined>();
+  const [viewingQuestion, setViewingQuestion] = useState<Question | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Question | null>(null);
+  const { toast } = useToast();
 
-  const { data: questions } = useQuery<Question[]>({
+  const { data: questions, isLoading } = useQuery<Question[]>({
     queryKey: ["/api/questions"],
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest(`/api/questions/${id}`, "DELETE");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/questions"] });
+      toast({
+        title: "Question deleted",
+        description: "The question has been removed from the bank.",
+      });
+      setDeleteTarget(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to delete question.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const filteredQuestions = questions?.filter((q) => {
-    if (filterSkill && q.skill !== filterSkill) return false;
-    if (filterType && q.type !== filterType) return false;
-    if (searchQuery && !q.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (filterSkill !== "all" && q.skill !== filterSkill) return false;
+    if (filterType !== "all" && q.type !== filterType) return false;
+    const query = searchQuery.trim().toLowerCase();
+    if (query) {
+      const tags = q.tags?.map((tag) => tag.toLowerCase()) ?? [];
+      if (
+        !q.title.toLowerCase().includes(query) &&
+        !q.content.toLowerCase().includes(query) &&
+        !tags.some((tag) => tag.includes(query))
+      ) {
+        return false;
+      }
+    }
     return true;
   });
 
@@ -773,10 +811,22 @@ function QuestionsView() {
 
       <Card className="p-6">
         <div className="flex flex-wrap gap-3 mb-6">
-          <Button data-testid="button-add-question" className="gap-2">
+          <Button
+            data-testid="button-add-question"
+            className="gap-2"
+            onClick={() => {
+              setSelectedQuestion(undefined);
+              setQuestionModalOpen(true);
+            }}
+          >
             <Plus className="w-4 h-4" />
             Add new question
           </Button>
+          <QuestionImportButton
+            onImported={() =>
+              queryClient.invalidateQueries({ queryKey: ["/api/questions"] })
+            }
+          />
           <div className="flex gap-2 ml-auto">
             <Select
               value={filterSkill || "all"}
@@ -791,6 +841,7 @@ function QuestionsView() {
                 <SelectItem value="Listening">Listening</SelectItem>
                 <SelectItem value="Speaking">Speaking</SelectItem>
                 <SelectItem value="Writing">Writing</SelectItem>
+                <SelectItem value="GrammarVocabulary">Grammar &amp; Vocabulary</SelectItem>
               </SelectContent>
             </Select>
             <Select
@@ -806,11 +857,12 @@ function QuestionsView() {
                 <SelectItem value="mcq_multi">MCQ (multiple answers)</SelectItem>
                 <SelectItem value="fill_blank">Fill in the blanks</SelectItem>
                 <SelectItem value="writing_prompt">Writing prompt</SelectItem>
+                <SelectItem value="speaking_prompt">Speaking prompt</SelectItem>
               </SelectContent>
             </Select>
             <Input
               data-testid="input-search-questions"
-              placeholder="Search by title or tags..."
+              placeholder="Tìm theo tiêu đề, nội dung, tags..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-60"
@@ -832,7 +884,13 @@ function QuestionsView() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {!filteredQuestions || filteredQuestions.length === 0 ? (
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-12 text-gray-400">
+                    Đang tải danh sách câu hỏi...
+                  </TableCell>
+                </TableRow>
+              ) : !filteredQuestions || filteredQuestions.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-12 text-gray-400">
                     <ClipboardList className="w-10 h-10 mx-auto mb-3" />
@@ -847,7 +905,9 @@ function QuestionsView() {
                     className="hover:bg-gray-50"
                   >
                     <TableCell className="font-medium">{index + 1}</TableCell>
-                    <TableCell className="font-medium text-gray-900">{question.title}</TableCell>
+                    <TableCell className="font-medium text-gray-900">
+                      {question.title}
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant="secondary"
@@ -855,10 +915,12 @@ function QuestionsView() {
                           question.skill === "Reading"
                             ? "bg-blue-100 text-blue-700"
                             : question.skill === "Listening"
-                              ? "bg-cyan-100 text-cyan-700"
-                              : question.skill === "Speaking"
-                                ? "bg-green-100 text-green-700"
-                                : "bg-orange-100 text-orange-700"
+                            ? "bg-cyan-100 text-cyan-700"
+                            : question.skill === "Speaking"
+                            ? "bg-green-100 text-green-700"
+                            : question.skill === "Writing"
+                            ? "bg-orange-100 text-orange-700"
+                            : "bg-purple-100 text-purple-700"
                         }
                       >
                         {question.skill}
@@ -866,17 +928,21 @@ function QuestionsView() {
                     </TableCell>
                     <TableCell className="text-sm text-gray-600">
                       {question.type === "mcq_single"
-                        ? "MCQ (single answer)"
+                        ? "MCQ (1)"
                         : question.type === "mcq_multi"
-                          ? "MCQ (multiple answers)"
-                          : question.type === "fill_blank"
-                            ? "Fill in the blanks"
-                            : "Writing prompt"}
+                        ? "MCQ (nhiều)"
+                        : question.type === "fill_blank"
+                        ? "Điền chỗ trống"
+                        : question.type === "writing_prompt"
+                        ? "Writing prompt"
+                        : "Speaking prompt"}
                     </TableCell>
-                    <TableCell className="font-semibold text-primary">{question.points}</TableCell>
+                    <TableCell className="font-semibold text-primary">
+                      {question.points}
+                    </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
-                        {question.tags?.slice(0, 2).map((tag) => (
+                        {question.tags?.slice(0, 3).map((tag) => (
                           <Badge key={tag} variant="outline" className="text-xs">
                             {tag}
                           </Badge>
@@ -885,10 +951,23 @@ function QuestionsView() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        <Button variant="ghost" size="sm" data-testid={`button-edit-question-${question.id}`}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          data-testid={`button-edit-question-${question.id}`}
+                          onClick={() => {
+                            setSelectedQuestion(question);
+                            setQuestionModalOpen(true);
+                          }}
+                        >
                           <Pencil className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" data-testid={`button-view-question-${question.id}`}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          data-testid={`button-view-question-${question.id}`}
+                          onClick={() => setViewingQuestion(question)}
+                        >
                           <Eye className="w-4 h-4" />
                         </Button>
                         <Button
@@ -896,6 +975,10 @@ function QuestionsView() {
                           size="sm"
                           data-testid={`button-delete-question-${question.id}`}
                           className="text-destructive hover:text-destructive"
+                          onClick={() => setDeleteTarget(question)}
+                          disabled={
+                            deleteMutation.isPending && deleteTarget?.id === question.id
+                          }
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -908,6 +991,123 @@ function QuestionsView() {
           </Table>
         </div>
       </Card>
+
+      <QuestionFormModal
+        open={questionModalOpen}
+        onOpenChange={(open) => {
+          setQuestionModalOpen(open);
+          if (!open) {
+            setSelectedQuestion(undefined);
+          }
+        }}
+        question={selectedQuestion}
+      />
+
+      <Dialog open={!!viewingQuestion} onOpenChange={(open) => !open && setViewingQuestion(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{viewingQuestion?.title}</DialogTitle>
+            <DialogDescription>Chi tiết câu hỏi và đáp án tham khảo</DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh] pr-2">
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-3 text-sm text-gray-600">
+                <Badge variant="secondary">{viewingQuestion?.skill}</Badge>
+                <Badge variant="outline">Loại: {viewingQuestion?.type}</Badge>
+                <Badge variant="outline">Điểm: {viewingQuestion?.points}</Badge>
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-700 mb-1">Nội dung</h4>
+                <p className="whitespace-pre-wrap text-gray-800">
+                  {viewingQuestion?.content}
+                </p>
+              </div>
+              {viewingQuestion?.options && viewingQuestion.options.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-gray-700 mb-1">Tùy chọn</h4>
+                  <ul className="list-disc list-inside space-y-1 text-gray-800">
+                    {viewingQuestion.options.map((option, idx) => (
+                      <li key={`${option}-${idx}`}>{option}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {viewingQuestion?.correctAnswers &&
+                viewingQuestion.correctAnswers.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-gray-700 mb-1">Đáp án đúng</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {viewingQuestion.correctAnswers.map((ans) => (
+                        <Badge key={ans} variant="default">
+                          {ans}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              {viewingQuestion?.tags && viewingQuestion.tags.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-gray-700 mb-1">Tags</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {viewingQuestion.tags.map((tag) => (
+                      <Badge key={tag} variant="outline">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {viewingQuestion?.mediaUrl && (
+                <div>
+                  <h4 className="font-semibold text-gray-700 mb-1">Tài nguyên đính kèm</h4>
+                  <a
+                    href={viewingQuestion.mediaUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-primary underline"
+                  >
+                    {viewingQuestion.mediaUrl}
+                  </a>
+                </div>
+              )}
+              {viewingQuestion?.explanation && (
+                <div>
+                  <h4 className="font-semibold text-gray-700 mb-1">Giải thích</h4>
+                  <p className="whitespace-pre-wrap text-gray-800">
+                    {viewingQuestion.explanation}
+                  </p>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xóa câu hỏi?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Hành động này không thể hoàn tác. Câu hỏi "{deleteTarget?.title}" sẽ bị xóa
+              vĩnh viễn khỏi ngân hàng câu hỏi.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {deleteMutation.isPending ? "Đang xóa..." : "Xóa câu hỏi"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
