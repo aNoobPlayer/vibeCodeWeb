@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { SetCompositionModal } from "@/components/SetCompositionModal";
+import { TestSetFormModal } from "@/components/TestSetFormModal";
 import { QuestionFormModal } from "@/components/QuestionFormModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card } from "@/components/ui/card";
@@ -582,20 +583,47 @@ function SkillDistributionChart() {
 
 // Test Sets View Component
 function TestSetsView() {
+  const { toast } = useToast();
   const [filterSkill, setFilterSkill] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [composeSet, setComposeSet] = useState<TestSet | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingSet, setEditingSet] = useState<TestSet | null>(null);
+  const [setToDelete, setSetToDelete] = useState<TestSet | null>(null);
 
   const { data: testSets } = useQuery<TestSet[]>({
     queryKey: ["/api/test-sets"],
   });
 
-  const filteredSets = testSets?.filter((set) => {
-    if (filterSkill && set.skill !== filterSkill) return false;
-    if (filterStatus && set.status !== filterStatus) return false;
-    if (searchQuery && !set.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    return true;
+  const filteredSets = useMemo(() => {
+    if (!testSets) return [];
+    return testSets.filter((set) => {
+      if (filterSkill && set.skill !== filterSkill) return false;
+      if (filterStatus && set.status !== filterStatus) return false;
+      if (searchQuery && !set.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      return true;
+    });
+  }, [testSets, filterSkill, filterStatus, searchQuery]);
+  const deleteSetMutation = useMutation<void, Error, TestSet>({
+    mutationFn: async (set) => {
+      await apiRequest("DELETE", `/api/test-sets/${set.id}`);
+    },
+    onSuccess: (_, set) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/test-sets"] });
+      toast({
+        title: "Test set deleted",
+        description: `"${set.title}" has been removed.`,
+      });
+      setSetToDelete(null);
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete test set",
+        variant: "destructive",
+      });
+    },
   });
 
   return (
@@ -607,7 +635,14 @@ function TestSetsView() {
 
       <Card className="p-6">
         <div className="flex flex-wrap gap-3 mb-6">
-          <Button data-testid="button-add-set" className="gap-2">
+           <Button
+            data-testid="button-add-set"
+            className="gap-2"
+            onClick={() => {
+              setEditingSet(null);
+              setIsFormOpen(true);
+            }}
+          >
             <Plus className="w-4 h-4" />
             Add test set
           </Button>
@@ -703,8 +738,15 @@ function TestSetsView() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        <Button variant="ghost" size="sm" data-testid={`button-edit-${set.id}`}>
-                          <Pencil className="w-4 h-4" />
+                         <Button
+                          variant="ghost"
+                          size="sm"
+                          data-testid={`button-edit-${set.id}`}
+                          onClick={() => {
+                            setEditingSet(set);
+                            setIsFormOpen(true);
+                          }}
+                        >                          <Pencil className="w-4 h-4" />
                         </Button>
                         <Button
                           variant="ghost"
@@ -714,14 +756,13 @@ function TestSetsView() {
                         >
                           <ClipboardList className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" data-testid={`button-view-${set.id}`}>
-                          <Eye className="w-4 h-4" />
-                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           data-testid={`button-delete-${set.id}`}
                           className="text-destructive hover:text-destructive"
+                          onClick={() => setSetToDelete(set)}
+
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -736,7 +777,36 @@ function TestSetsView() {
       </Card>
       {composeSet && (
         <SetCompositionModal setItem={composeSet} onClose={() => setComposeSet(null)} />
-      )}
+      )} <TestSetFormModal
+        open={isFormOpen}
+        onOpenChange={(open) => {
+          setIsFormOpen(open);
+          if (!open) {
+            setEditingSet(null);
+          }
+        }}
+        testSet={editingSet ?? undefined}
+      />
+      <AlertDialog open={!!setToDelete} onOpenChange={(open) => !open && setSetToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete test set</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{setToDelete?.title}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={() => setToDelete && deleteSetMutation.mutate(setToDelete)}
+              disabled={deleteSetMutation.isPending}
+            >
+              {deleteSetMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -758,48 +828,43 @@ function QuestionsView() {
   const [selectedQuestion, setSelectedQuestion] = useState<Question | undefined>();
   const [viewingQuestion, setViewingQuestion] = useState<Question | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Question | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+  const [questionToDelete, setQuestionToDelete] = useState<Question | null>(null);
   const { toast } = useToast();
 
-  const { data: questions, isLoading } = useQuery<Question[]>({
+  const { data: questions , isLoading} = useQuery<QuestionsResponse>({
     queryKey: ["/api/questions"],
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await apiRequest(`/api/questions/${id}`, "DELETE");
+const questionItems = useMemo(() => questions?.items ?? [], [questions]);
+  const filteredQuestions = useMemo(() => {
+    return questionItems.filter((q) => {
+      if (filterSkill && q.skill !== filterSkill) return false;
+      if (filterType && q.type !== filterType) return false;
+      if (searchQuery && !q.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      return true;
+    });
+  }, [questionItems, filterSkill, filterType, searchQuery]);
+  const deleteQuestionMutation = useMutation<void, Error, Question>({
+    mutationFn: async (question) => {
+      await apiRequest("DELETE", `/api/questions/${question.id}`);
     },
-    onSuccess: () => {
+    onSuccess: (_, question) => {
       queryClient.invalidateQueries({ queryKey: ["/api/questions"] });
       toast({
         title: "Question deleted",
-        description: "The question has been removed from the bank.",
+        description: `"${question.title || question.type}" has been removed from the bank.`,
       });
-      setDeleteTarget(null);
+      setQuestionToDelete(null);
     },
-    onError: (error: any) => {
+    onError: (error) => {
       toast({
         title: "Error",
-        description: error?.message || "Failed to delete question.",
+        description: error.message || "Failed to delete question",
         variant: "destructive",
       });
     },
-  });
-
-  const filteredQuestions = questions?.filter((q) => {
-    if (filterSkill !== "all" && q.skill !== filterSkill) return false;
-    if (filterType !== "all" && q.type !== filterType) return false;
-    const query = searchQuery.trim().toLowerCase();
-    if (query) {
-      const tags = q.tags?.map((tag) => tag.toLowerCase()) ?? [];
-      if (
-        !q.title.toLowerCase().includes(query) &&
-        !q.content.toLowerCase().includes(query) &&
-        !tags.some((tag) => tag.includes(query))
-      ) {
-        return false;
-      }
-    }
-    return true;
   });
 
   return (
@@ -815,8 +880,8 @@ function QuestionsView() {
             data-testid="button-add-question"
             className="gap-2"
             onClick={() => {
-              setSelectedQuestion(undefined);
-              setQuestionModalOpen(true);
+              setEditingQuestion(null);
+              setIsModalOpen(true);
             }}
           >
             <Plus className="w-4 h-4" />
@@ -956,8 +1021,8 @@ function QuestionsView() {
                           size="sm"
                           data-testid={`button-edit-question-${question.id}`}
                           onClick={() => {
-                            setSelectedQuestion(question);
-                            setQuestionModalOpen(true);
+                            setEditingQuestion(question);
+                            setIsModalOpen(true);
                           }}
                         >
                           <Pencil className="w-4 h-4" />
@@ -975,10 +1040,7 @@ function QuestionsView() {
                           size="sm"
                           data-testid={`button-delete-question-${question.id}`}
                           className="text-destructive hover:text-destructive"
-                          onClick={() => setDeleteTarget(question)}
-                          disabled={
-                            deleteMutation.isPending && deleteTarget?.id === question.id
-                          }
+                          onClick={() => setQuestionToDelete(question)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -991,119 +1053,33 @@ function QuestionsView() {
           </Table>
         </div>
       </Card>
-
-      <QuestionFormModal
-        open={questionModalOpen}
+<QuestionFormModal
+        open={isModalOpen}
         onOpenChange={(open) => {
-          setQuestionModalOpen(open);
+          setIsModalOpen(open);
           if (!open) {
-            setSelectedQuestion(undefined);
+            setEditingQuestion(null);
           }
         }}
-        question={selectedQuestion}
+        question={editingQuestion ?? undefined}
       />
-
-      <Dialog open={!!viewingQuestion} onOpenChange={(open) => !open && setViewingQuestion(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{viewingQuestion?.title}</DialogTitle>
-            <DialogDescription>Chi tiết câu hỏi và đáp án tham khảo</DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="max-h-[60vh] pr-2">
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-3 text-sm text-gray-600">
-                <Badge variant="secondary">{viewingQuestion?.skill}</Badge>
-                <Badge variant="outline">Loại: {viewingQuestion?.type}</Badge>
-                <Badge variant="outline">Điểm: {viewingQuestion?.points}</Badge>
-              </div>
-              <div>
-                <h4 className="font-semibold text-gray-700 mb-1">Nội dung</h4>
-                <p className="whitespace-pre-wrap text-gray-800">
-                  {viewingQuestion?.content}
-                </p>
-              </div>
-              {viewingQuestion?.options && viewingQuestion.options.length > 0 && (
-                <div>
-                  <h4 className="font-semibold text-gray-700 mb-1">Tùy chọn</h4>
-                  <ul className="list-disc list-inside space-y-1 text-gray-800">
-                    {viewingQuestion.options.map((option, idx) => (
-                      <li key={`${option}-${idx}`}>{option}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {viewingQuestion?.correctAnswers &&
-                viewingQuestion.correctAnswers.length > 0 && (
-                  <div>
-                    <h4 className="font-semibold text-gray-700 mb-1">Đáp án đúng</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {viewingQuestion.correctAnswers.map((ans) => (
-                        <Badge key={ans} variant="default">
-                          {ans}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              {viewingQuestion?.tags && viewingQuestion.tags.length > 0 && (
-                <div>
-                  <h4 className="font-semibold text-gray-700 mb-1">Tags</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {viewingQuestion.tags.map((tag) => (
-                      <Badge key={tag} variant="outline">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {viewingQuestion?.mediaUrl && (
-                <div>
-                  <h4 className="font-semibold text-gray-700 mb-1">Tài nguyên đính kèm</h4>
-                  <a
-                    href={viewingQuestion.mediaUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-primary underline"
-                  >
-                    {viewingQuestion.mediaUrl}
-                  </a>
-                </div>
-              )}
-              {viewingQuestion?.explanation && (
-                <div>
-                  <h4 className="font-semibold text-gray-700 mb-1">Giải thích</h4>
-                  <p className="whitespace-pre-wrap text-gray-800">
-                    {viewingQuestion.explanation}
-                  </p>
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog
-        open={!!deleteTarget}
-        onOpenChange={(open) => {
-          if (!open) setDeleteTarget(null);
-        }}
-      >
+      <AlertDialog open={!!questionToDelete} onOpenChange={(open) => !open && setQuestionToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Xóa câu hỏi?</AlertDialogTitle>
+            <AlertDialogTitle>Delete question</AlertDialogTitle>
             <AlertDialogDescription>
-              Hành động này không thể hoàn tác. Câu hỏi "{deleteTarget?.title}" sẽ bị xóa
-              vĩnh viễn khỏi ngân hàng câu hỏi.
+              Are you sure you want to delete "{questionToDelete?.title || questionToDelete?.type}"? This action cannot be
+              undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
-              className="bg-destructive text-white hover:bg-destructive/90"
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={() => questionToDelete && deleteQuestionMutation.mutate(questionToDelete)}
+              disabled={deleteQuestionMutation.isPending}
             >
-              {deleteMutation.isPending ? "Đang xóa..." : "Xóa câu hỏi"}
+              {deleteQuestionMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

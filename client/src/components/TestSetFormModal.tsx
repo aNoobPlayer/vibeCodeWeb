@@ -60,9 +60,9 @@ export function TestSetFormModal({ open, onOpenChange, testSet }: TestSetFormMod
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
       if (isEdit) {
-        return apiRequest(`/api/test-sets/${testSet.id}`, "PATCH", data);
+        return apiRequest("PATCH", `/api/test-sets/${testSet.id}`, data);
       } else {
-        return apiRequest("/api/test-sets", "POST", data);
+        return apiRequest("POST", "/api/test-sets", data);
       }
     },
     onSuccess: () => {

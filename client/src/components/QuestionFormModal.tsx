@@ -72,9 +72,9 @@ export function QuestionFormModal({ open, onOpenChange, question }: QuestionForm
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
       if (isEdit) {
-        return apiRequest(`/api/questions/${question.id}`, "PATCH", data);
+        return apiRequest("PATCH", `/api/questions/${question.id}`, data);
       } else {
-        return apiRequest("/api/questions", "POST", data);
+        return apiRequest("POST", "/api/questions", data);
       }
     },
     onSuccess: () => {
