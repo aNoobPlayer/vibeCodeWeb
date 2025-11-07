@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronDown, Trash2 } from "lucide-react";
 import type { TestSet, Question } from "@shared/schema";
+import type { QuestionsResponse } from "@/types/api";
 import { queryClient } from "@/lib/queryClient";
 
 export function SetCompositionModal({ setItem, onClose }: { setItem: TestSet; onClose: () => void }) {
@@ -22,9 +23,10 @@ export function SetCompositionModal({ setItem, onClose }: { setItem: TestSet; on
     },
   });
 
-  const { data: bank } = useQuery<Question[]>({
+  const { data: bankData } = useQuery<QuestionsResponse>({
     queryKey: ["/api/questions"],
   });
+  const bank = bankData?.items ?? [];
 
   const addMutation = useMutation({
     mutationFn: async (payload: { questionId: number }) => {
@@ -167,4 +169,3 @@ export function SetCompositionModal({ setItem, onClose }: { setItem: TestSet; on
     </Dialog>
   );
 }
-

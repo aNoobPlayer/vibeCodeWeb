@@ -272,16 +272,22 @@ function PracticeCard({ testSet }: { testSet: TestSet }) {
     Listening: "from-cyan-500 to-cyan-700",
     Speaking: "from-green-500 to-green-700",
     Writing: "from-orange-500 to-orange-700",
-  };
+    GrammarVocabulary: "from-purple-500 to-indigo-700",
+    General: "from-slate-500 to-slate-700",
+  } as const;
 
   const icons = {
     Reading: BookOpen,
     Listening: Headphones,
     Speaking: Mic,
     Writing: PenTool,
-  };
+    GrammarVocabulary: BookOpen,
+    General: Library,
+  } as const;
   
-  const IconComponent = icons[testSet.skill as keyof typeof icons];
+  const skillKey = (testSet.skill in icons ? testSet.skill : "General") as keyof typeof icons;
+  const IconComponent = icons[skillKey] || BookOpen;
+  const gradientClass = gradients[skillKey] || gradients.General;
 
   const [, setLocation] = useLocation();
 
@@ -312,7 +318,7 @@ function PracticeCard({ testSet }: { testSet: TestSet }) {
       onClick={onStart}
       data-testid={`practice-card-${testSet.id}`}
       className={`relative overflow-hidden bg-gradient-to-br ${
-        gradients[testSet.skill as keyof typeof gradients]
+        gradientClass
       } text-white p-6 rounded-2xl shadow-xl hover:shadow-2xl hover:-translate-y-2 hover:scale-[1.02] transition-all duration-300 text-left group`}
     >
       {/* Shimmer Effect */}

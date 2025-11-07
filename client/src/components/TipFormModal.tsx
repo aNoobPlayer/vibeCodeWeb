@@ -57,10 +57,9 @@ export function TipFormModal({ open, onOpenChange, tip }: TipFormModalProps) {
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
       if (isEdit) {
-        return apiRequest("PATCH", `/api/tips/${tip.id}`, data);
-      } else {
-        return apiRequest("POST", "/api/tips", data);
+        return apiRequest(`/api/tips/${tip.id}`, "PATCH", data);
       }
+      return apiRequest("/api/tips", "POST", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tips"] });

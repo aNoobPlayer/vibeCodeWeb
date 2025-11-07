@@ -77,6 +77,7 @@ import {
   Loader2,
 } from "lucide-react";
 import type { TestSet, Question, Tip, Media, Activity } from "@shared/schema";
+import type { QuestionsResponse } from "@/types/api";
 import { QuestionImportButton } from "@/components/QuestionImportModal";
 import { GradingModal } from "@/components/GradingModal";
 import { useToast } from "@/hooks/use-toast";
@@ -339,16 +340,27 @@ function DashboardView() {
   const { data: testSets } = useQuery<TestSet[]>({
     queryKey: ["/api/test-sets"],
   });
-  const { data: questions } = useQuery<Question[]>({
+  const { data: questionsData } = useQuery<QuestionsResponse>({
     queryKey: ["/api/questions"],
   });
+  const questionItems = useMemo(() => questionsData?.items ?? [], [questionsData]);
 
   const kpiData = [
-    { label: "Total test sets", value: stats?.setsCount || 0, sublabel: "Ready to assign", testId: "kpi-sets" },
-    { label: "Question bank items", value: stats?.questionsCount || 0, sublabel: "Curated questions", testId: "kpi-questions" },
+    {
+      label: "Total test sets",
+      value: stats?.setsCount || 0,
+      sublabel: "Ready to assign",
+      testId: "kpi-sets",
+    },
+    {
+      label: "Question bank items",
+      value: stats?.questionsCount ?? questionsData?.total ?? questionItems.length ?? 0,
+      sublabel: "Curated questions",
+      testId: "kpi-questions",
+    },
   ];
   const recentSets = useMemo(() => (testSets ? testSets.slice(0, 4) : []), [testSets]);
-  const recentQuestions = useMemo(() => (questions ? questions.slice(0, 5) : []), [questions]);
+  const recentQuestions = useMemo(() => questionItems.slice(0, 5), [questionItems]);
 
   const formatQuestionType = (type: Question["type"]) => {
     switch (type) {
@@ -607,7 +619,7 @@ function TestSetsView() {
   }, [testSets, filterSkill, filterStatus, searchQuery]);
   const deleteSetMutation = useMutation<void, Error, TestSet>({
     mutationFn: async (set) => {
-      await apiRequest("DELETE", `/api/test-sets/${set.id}`);
+      await apiRequest(`/api/test-sets/${set.id}`, "DELETE");
     },
     onSuccess: (_, set) => {
       queryClient.invalidateQueries({ queryKey: ["/api/test-sets"] });
@@ -812,17 +824,9 @@ function TestSetsView() {
 }
 
 // Questions View Component
-type QuestionsResponse = {
-  items: Question[];
-  page: number;
-  size: number;
-  total: number;
-  hasMore: boolean;
-};
-
 function QuestionsView() {
-  const [filterSkill, setFilterSkill] = useState("all");
-  const [filterType, setFilterType] = useState("all");
+  const [filterSkill, setFilterSkill] = useState("");
+  const [filterType, setFilterType] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [questionModalOpen, setQuestionModalOpen] = useState(false);
   const [selectedQuestion, setSelectedQuestion] = useState<Question | undefined>();
@@ -833,11 +837,11 @@ function QuestionsView() {
   const [questionToDelete, setQuestionToDelete] = useState<Question | null>(null);
   const { toast } = useToast();
 
-  const { data: questions , isLoading} = useQuery<QuestionsResponse>({
+  const { data: questionsData, isLoading } = useQuery<QuestionsResponse>({
     queryKey: ["/api/questions"],
   });
 
-const questionItems = useMemo(() => questions?.items ?? [], [questions]);
+  const questionItems = useMemo(() => questionsData?.items ?? [], [questionsData]);
   const filteredQuestions = useMemo(() => {
     return questionItems.filter((q) => {
       if (filterSkill && q.skill !== filterSkill) return false;
@@ -848,7 +852,7 @@ const questionItems = useMemo(() => questions?.items ?? [], [questions]);
   }, [questionItems, filterSkill, filterType, searchQuery]);
   const deleteQuestionMutation = useMutation<void, Error, Question>({
     mutationFn: async (question) => {
-      await apiRequest("DELETE", `/api/questions/${question.id}`);
+      await apiRequest(`/api/questions/${question.id}`, "DELETE");
     },
     onSuccess: (_, question) => {
       queryClient.invalidateQueries({ queryKey: ["/api/questions"] });
@@ -1423,7 +1427,7 @@ function UsersView() {
     { username: string; password: string; role: "admin" | "student" }
   >({
     mutationFn: async (payload) => {
-      const res = await apiRequest("POST", "/api/admin/users", payload);
+      const res = await apiRequest("/api/admin/users", "POST", payload);
       return res.json();
     },
     onSuccess: () => {
@@ -1450,7 +1454,7 @@ function UsersView() {
     { id: string; role: "admin" | "student"; username: string }
   >({
     mutationFn: async (payload) => {
-      const res = await apiRequest("PATCH", `/api/admin/users/${payload.id}`, { role: payload.role });
+      const res = await apiRequest(`/api/admin/users/${payload.id}`, "PATCH", { role: payload.role });
       return res.json();
     },
     onSuccess: (_, variables) => {
@@ -1473,7 +1477,7 @@ function UsersView() {
 
   const deleteUserMutation = useMutation<void, Error, { id: string; username: string }>({
     mutationFn: async (payload) => {
-      await apiRequest("DELETE", `/api/admin/users/${payload.id}`);
+      await apiRequest(`/api/admin/users/${payload.id}`, "DELETE");
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });

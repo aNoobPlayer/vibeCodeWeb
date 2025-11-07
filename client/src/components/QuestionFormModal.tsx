@@ -72,10 +72,9 @@ export function QuestionFormModal({ open, onOpenChange, question }: QuestionForm
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
       if (isEdit) {
-        return apiRequest("PATCH", `/api/questions/${question.id}`, data);
-      } else {
-        return apiRequest("POST", "/api/questions", data);
+        return apiRequest(`/api/questions/${question.id}`, "PATCH", data);
       }
+      return apiRequest("/api/questions", "POST", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/questions"] });
