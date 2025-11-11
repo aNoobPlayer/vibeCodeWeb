@@ -13,7 +13,7 @@ import type { Question } from "@shared/schema";
 const templateSchema = z.object({
   label: z.string().min(1, "Label is required"),
   description: z.string().min(1, "Description is required"),
-  skill: z.string().optional(),
+  skills: z.array(z.string()).min(1, "Select at least one skill focus"),
   types: z.array(z.string()).min(1, "Select at least one question type"),
   content: z.string().min(1, "Template content is required"),
   options: z.array(z.string().trim()).optional(),
@@ -30,6 +30,8 @@ const QUESTION_TYPES: { value: Question["type"]; label: string }[] = [
   { value: "writing_prompt", label: "Writing prompt" },
   { value: "speaking_prompt", label: "Speaking prompt" },
 ];
+
+const SKILL_OPTIONS = ["Reading", "Listening", "Speaking", "Writing", "GrammarVocabulary", "General"];
 
 type TemplateFormModalProps = {
   open: boolean;
@@ -53,7 +55,7 @@ export function TemplateFormModal({
     defaultValues: {
       label: "",
       description: "",
-      skill: "Reading",
+      skills: ["Reading"],
       types: ["mcq_single"],
       content: "",
       options: [],
@@ -67,7 +69,7 @@ export function TemplateFormModal({
       form.reset({
         label: template.label,
         description: template.description,
-        skill: template.skill,
+        skills: template.skills,
         types: template.types,
         content: template.content,
         options: template.options ?? [],
@@ -78,7 +80,7 @@ export function TemplateFormModal({
       form.reset({
         label: "",
         description: "",
-        skill: "Reading",
+        skills: ["Reading"],
         types: ["mcq_single"],
         content: "",
         options: [],
@@ -150,16 +152,40 @@ export function TemplateFormModal({
             <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
-                name="skill"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Skill focus</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Reading, Listening, etc." {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                name="skills"
+                render={({ field }) => {
+                  const currentSkills: string[] = field.value ?? [];
+                  const handleToggle = (skill: string) => {
+                    const next = currentSkills.includes(skill)
+                      ? currentSkills.filter((s) => s !== skill)
+                      : [...currentSkills, skill];
+                    field.onChange(next.length ? next : ["General"]);
+                  };
+                  return (
+                    <FormItem>
+                      <FormLabel>Skill focus</FormLabel>
+                      <div className="mt-2 grid gap-2">
+                        {SKILL_OPTIONS.map((skill) => {
+                          const active = currentSkills.includes(skill);
+                          return (
+                            <button
+                              key={skill}
+                              type="button"
+                              onClick={() => handleToggle(skill)}
+                              className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition ${
+                                active ? "border-primary bg-primary/10 text-primary" : "border-gray-200 text-gray-600"
+                              }`}
+                            >
+                              {skill}
+                              <span className="text-xs">{active ? "Selected" : "Select"}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
               />
 
               <div>
@@ -286,7 +312,7 @@ function FieldListEditor({ label, placeholder, values, onAdd, onRemove }: FieldL
               className="text-gray-400 transition group-hover:text-gray-600"
               onClick={() => onRemove(index)}
             >
-              ✕
+              x
             </button>
           </span>
         ))}

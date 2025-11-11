@@ -4,7 +4,7 @@ export type QuestionTemplate = {
   id: string;
   label: string;
   description: string;
-  skill?: Question["skill"];
+  skills: Question["skill"][];
   types: Question["type"][];
   content: string;
   correctAnswers?: string[];

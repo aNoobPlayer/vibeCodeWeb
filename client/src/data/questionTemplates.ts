@@ -5,7 +5,7 @@ export const DEFAULT_QUESTION_TEMPLATES: QuestionTemplate[] = [
     id: "fill-single-gap",
     label: "Single sentence gap-fill",
     description: "Learners supply one word to complete the sentence.",
-    skill: "Reading",
+    skills: ["Reading"],
     types: ["fill_blank"],
     content:
       `Complete the sentence with ONE word.\n\n` +
@@ -17,7 +17,7 @@ export const DEFAULT_QUESTION_TEMPLATES: QuestionTemplate[] = [
     id: "fill-paragraph",
     label: "Short paragraph with two blanks",
     description: "Two blanks focusing on vocabulary and grammar.",
-    skill: "Reading",
+    skills: ["Reading"],
     types: ["fill_blank"],
     content:
       `Fill in the TWO blanks with the correct words.\n\n` +
@@ -29,7 +29,7 @@ export const DEFAULT_QUESTION_TEMPLATES: QuestionTemplate[] = [
     id: "writing-email",
     label: "Writing - informal email",
     description: "Prompt for a friendly email (120-150 words).",
-    skill: "Writing",
+    skills: ["Writing"],
     types: ["writing_prompt"],
     content:
       `You recently spent a weekend at your friend's house in Da Nang.\n` +
@@ -44,7 +44,7 @@ export const DEFAULT_QUESTION_TEMPLATES: QuestionTemplate[] = [
     id: "writing-opinion",
     label: "Writing - opinion essay",
     description: "Structured opinion piece with reasons and examples.",
-    skill: "Writing",
+    skills: ["Writing"],
     types: ["writing_prompt"],
     content:
       `Many people believe that teenagers should have a part-time job while studying.\n` +
@@ -60,7 +60,7 @@ export const DEFAULT_QUESTION_TEMPLATES: QuestionTemplate[] = [
     id: "reading-purpose-single",
     label: "Reading - identify the writer's purpose",
     description: "Short email that checks overall understanding of why it was written.",
-    skill: "Reading",
+    skills: ["Reading"],
     types: ["mcq_single"],
     content:
       `Read the email and choose the best answer.\n\n` +
@@ -83,7 +83,7 @@ export const DEFAULT_QUESTION_TEMPLATES: QuestionTemplate[] = [
     id: "reading-supporting-reasons",
     label: "Reading - select two supporting reasons",
     description: "Paragraph about student clubs with multiple correct answers.",
-    skill: "Reading",
+    skills: ["Reading"],
     types: ["mcq_multi"],
     content:
       `Read the paragraph. Choose TWO statements that are supported by the text.\n\n` +
@@ -106,7 +106,7 @@ export const DEFAULT_QUESTION_TEMPLATES: QuestionTemplate[] = [
     id: "listening-announcement-single",
     label: "Listening - transport announcement",
     description: "Use with an uploaded audio clip; focuses on gist and key fact.",
-    skill: "Listening",
+    skills: ["Listening"],
     types: ["mcq_single"],
     content:
       `Listen to the station announcement (attach the audio via the media picker).\n` +
@@ -125,7 +125,7 @@ export const DEFAULT_QUESTION_TEMPLATES: QuestionTemplate[] = [
     id: "listening-conversation-details",
     label: "Listening - select two details",
     description: "Conversation between two students planning a group project.",
-    skill: "Listening",
+    skills: ["Listening"],
     types: ["mcq_multi"],
     content:
       `You will hear two classmates discuss their group project schedule.\n` +

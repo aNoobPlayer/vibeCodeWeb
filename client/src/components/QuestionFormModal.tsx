@@ -56,6 +56,7 @@ export function QuestionFormModal({ open, onOpenChange, question }: QuestionForm
     },
   });
   const questionType = form.watch("type");
+  const questionSkill = form.watch("skill");
   const options = form.watch("options") || [];
   const correctAnswers = form.watch("correctAnswers") || [];
   const titleValue = form.watch("title");
@@ -117,6 +118,7 @@ export function QuestionFormModal({ open, onOpenChange, question }: QuestionForm
   };
 
   const { templates } = useQuestionTemplates();
+  const [templateSkillFilters, setTemplateSkillFilters] = useState<string[]>([]);
 
   const needsMultipleChoice = questionType === "mcq_single" || questionType === "mcq_multi";
   const needsFillAnswers = questionType === "fill_blank";
@@ -159,9 +161,43 @@ export function QuestionFormModal({ open, onOpenChange, question }: QuestionForm
     mediaUrl: mediaUrlValue,
   };
 
+  const toggleTemplateSkillFilter = (skill: string) => {
+    setTemplateSkillFilters((prev) => (prev.includes(skill) ? prev.filter((s) => s !== skill) : [...prev, skill]));
+  };
+
+  const clearTemplateSkillFilters = () => {
+    if (questionSkill) {
+      setTemplateSkillFilters([questionSkill]);
+    } else {
+      setTemplateSkillFilters([]);
+    }
+  };
+
+  const templateSkillOptions = useMemo(() => {
+    const set = new Set<string>();
+    templates.forEach((template) => {
+      template.skills.forEach((skill) => set.add(skill));
+    });
+    return Array.from(set).sort();
+  }, [templates]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (questionSkill) {
+      setTemplateSkillFilters([questionSkill]);
+    } else {
+      setTemplateSkillFilters([]);
+    }
+  }, [questionSkill, open]);
+
   const templateOptions = useMemo(
-    () => templates.filter((template) => template.types.includes(questionType as Question["type"])),
-    [questionType, templates],
+    () =>
+      templates.filter((template) => {
+        if (!template.types.includes(questionType as Question["type"])) return false;
+        if (templateSkillFilters.length === 0) return true;
+        return template.skills.some((skill) => templateSkillFilters.includes(skill));
+      }),
+    [questionType, templateSkillFilters, templates],
   );
 
   const isChoiceQuestion = questionType === "mcq_single" || questionType === "mcq_multi";
@@ -475,6 +511,36 @@ export function QuestionFormModal({ open, onOpenChange, question }: QuestionForm
                       subtitle="Leverage templates, then lock in the correct answers or expected response."
                       badge="Guided"
                     >
+                      {templateSkillOptions.length > 0 && (
+                        <div className="rounded-2xl border border-gray-200 bg-white/80 p-4 space-y-2">
+                          <p className="text-sm font-semibold text-gray-900">Skill focus filters</p>
+                          <div className="flex flex-wrap gap-2">
+                            {templateSkillOptions.map((skill) => {
+                              const active = templateSkillFilters.includes(skill);
+                              return (
+                                <button
+                                  key={skill}
+                                  type="button"
+                                  onClick={() => toggleTemplateSkillFilter(skill)}
+                                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                    active ? "border-primary bg-primary/10 text-primary" : "border-gray-200 text-gray-500"
+                                  }`}
+                                >
+                                  {skill}
+                                </button>
+                              );
+                            })}
+                            <button type="button" className="text-xs text-gray-400 underline" onClick={clearTemplateSkillFilters}>
+                              Reset
+                            </button>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            Showing templates mapped to {templateSkillFilters.length ? "selected skills" : "all skills"}. Your question
+                            skill ({questionSkill || "unset"}) is highlighted automatically.
+                          </p>
+                        </div>
+                      )}
+
                       {templateOptions.length > 0 && (
                         <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4 space-y-4">
                           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -496,9 +562,32 @@ export function QuestionFormModal({ open, onOpenChange, question }: QuestionForm
                               >
                                 <p className="text-sm font-semibold text-gray-900">{template.label}</p>
                                 <p className="text-xs text-gray-500">{template.description}</p>
+                                <div className="mt-2 flex flex-wrap gap-1 text-[10px] uppercase text-gray-400">
+                                  {template.skills.map((skill) => (
+                                    <span key={`${template.id}-${skill}`} className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">
+                                      {skill}
+                                    </span>
+                                  ))}
+                                </div>
                                 <p className="mt-2 text-xs font-medium text-primary">Use template</p>
                               </button>
                             ))}
+                          </div>
+                          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                            <p className="text-sm font-semibold text-gray-900 mb-3">Template list</p>
+                            <div className="scroll-ghost max-h-56 overflow-y-auto divide-y divide-gray-200 text-sm text-gray-700">
+                              {templateOptions.map((template) => (
+                                <div key={`${template.id}-list`} className="flex items-start justify-between gap-3 py-2">
+                                  <div>
+                                    <p className="font-semibold text-gray-900">{template.label}</p>
+                                    <p className="text-xs text-gray-500">{template.description}</p>
+                                  </div>
+                                  <Button size="sm" variant="ghost" onClick={() => applyTemplate(template)}>
+                                    Apply
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         </div>
                       )}

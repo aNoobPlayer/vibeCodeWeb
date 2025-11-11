@@ -9,6 +9,35 @@ type Subscriber = () => void;
 let templatesCache: QuestionTemplate[] = loadFromStorage();
 const subscribers = new Set<Subscriber>();
 
+function normalizeTemplate(data: any): QuestionTemplate | null {
+  if (!data) return null;
+  const skillsRaw = Array.isArray(data.skills)
+    ? data.skills
+    : data.skill
+      ? [data.skill]
+      : [];
+  const skills = skillsRaw.filter(Boolean);
+  if (!skills.length) skills.push("General");
+
+  const types = Array.isArray(data.types) ? data.types.filter(Boolean) : [];
+  if (!types.length) return null;
+
+  return {
+    id: typeof data.id === "string" ? data.id : generateId(),
+    label: typeof data.label === "string" ? data.label : "Untitled template",
+    description: typeof data.description === "string" ? data.description : "",
+    skills,
+    types,
+    content: typeof data.content === "string" ? data.content : "",
+    correctAnswers: Array.isArray(data.correctAnswers) ? data.correctAnswers : undefined,
+    options: Array.isArray(data.options) ? data.options : undefined,
+    tags: Array.isArray(data.tags) ? data.tags : undefined,
+    difficulty: data.difficulty,
+    createdAt: data.createdAt ?? new Date().toISOString(),
+    updatedAt: data.updatedAt,
+  };
+}
+
 function loadFromStorage(): QuestionTemplate[] {
   if (typeof window === "undefined") return DEFAULT_QUESTION_TEMPLATES;
   try {
@@ -16,7 +45,10 @@ function loadFromStorage(): QuestionTemplate[] {
     if (!raw) return DEFAULT_QUESTION_TEMPLATES;
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return DEFAULT_QUESTION_TEMPLATES;
-    return parsed;
+    const normalized = parsed
+      .map((item) => normalizeTemplate(item))
+      .filter((item): item is QuestionTemplate => Boolean(item));
+    return normalized.length ? normalized : DEFAULT_QUESTION_TEMPLATES;
   } catch {
     return DEFAULT_QUESTION_TEMPLATES;
   }

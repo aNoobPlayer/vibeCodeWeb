@@ -1,0 +1,4 @@
+title,skill,type,content,options,correctAnswers,explanation,mediaUrl
+Listening comprehension intro,Listening,mcq_single,"You will hear a short announcement about an airport delay. Why is the flight postponed?",A) Weather;B) Technical issue;C) Staff shortage;D) Security alert,"B) Technical issue","Spokesperson mentions a mechanical inspection.","https://cdn.example.com/audio/airport-delay.mp3"
+Opinion essay about phones,Writing,writing_prompt,"Many schools consider banning mobile phones in classrooms. Do you agree or disagree? Write 180-220 words and include at least two reasons.",,,,""
+Fill the blank - study habits,Reading,fill_blank,"Studying with a friend can keep you ___ and make difficult topics feel ___." ,,"motivated;manageable",""

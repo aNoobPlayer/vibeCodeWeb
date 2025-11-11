@@ -9,6 +9,7 @@ import { TipFormModal } from "@/components/TipFormModal";
 import { MediaUploadButton } from "@/components/MediaUpload";
 import { Sparkles } from "lucide-react";
 import { TemplateFormModal, type TemplateFormData } from "@/components/TemplateFormModal";
+import { TestSetPreviewModal } from "@/components/TestSetPreviewModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -345,9 +346,9 @@ export default function AdminDashboard() {
 
         {/* Main Content */}
         <main className="p-8 scroll-ghost overflow-y-auto bg-gray-50">
-          {currentView === "dashboard" && <DashboardView />}
+          {currentView === "dashboard" && <DashboardView onShowTemplates={() => setCurrentView("templates")} />}
           {currentView === "sets" && <TestSetsView />}
-          {currentView === "questions" && <QuestionsView />}
+          {currentView === "questions" && <QuestionsView onShowTemplates={() => setCurrentView("templates")} />}
           {currentView === "grading" && <GradingView />}
           {currentView === "tips" && <TipsView />}
           {currentView === "templates" && <QuestionTemplatesView />}
@@ -360,7 +361,7 @@ export default function AdminDashboard() {
 }
 
 // Dashboard View Component
-function DashboardView() {
+function DashboardView({ onShowTemplates }: { onShowTemplates: () => void }) {
   const { data: stats } = useQuery<any>({
     queryKey: ["/api/stats"],
   });
@@ -388,6 +389,8 @@ function DashboardView() {
   ];
   const recentSets = useMemo(() => (testSets ? testSets.slice(0, 4) : []), [testSets]);
   const recentQuestions = useMemo(() => questionItems.slice(0, 5), [questionItems]);
+  const { templates } = useQuestionTemplates();
+  const featuredTemplates = useMemo(() => templates.slice(0, 4), [templates]);
 
   const formatQuestionType = (type: Question["type"]) => {
     switch (type) {
@@ -449,6 +452,36 @@ function DashboardView() {
           </div>
         </div>
       </Card>
+
+      {featuredTemplates.length > 0 && (
+        <Card className="p-5 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Template quick list</p>
+              <p className="text-xs text-gray-500">Review popular templates before creating a new question.</p>
+            </div>
+            <Button variant="ghost" size="sm" onClick={onShowTemplates}>
+              <Sparkles className="w-4 h-4 mr-1" />
+              Open template studio
+            </Button>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {featuredTemplates.map((template) => (
+              <div key={`featured-${template.id}`} className="rounded-xl border bg-white p-3 shadow-sm">
+                <p className="text-sm font-semibold text-gray-900">{template.label}</p>
+                <p className="text-xs text-gray-500">{template.description}</p>
+                <div className="mt-2 flex flex-wrap gap-1 text-[10px] uppercase text-gray-400">
+                  {template.skills.map((skill) => (
+                    <span key={`${template.id}-${skill}`} className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Card className="p-6">
@@ -546,14 +579,14 @@ function QuestionTemplatesView() {
     resetTemplates,
   } = useQuestionTemplates();
   const [search, setSearch] = useState("");
-  const [skillFilter, setSkillFilter] = useState("all");
+  const [skillFilters, setSkillFilters] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<QuestionTemplate | null>(null);
 
   const filteredTemplates = useMemo(() => {
     return templates.filter((template) => {
-      if (skillFilter !== "all" && template.skill !== skillFilter) return false;
+      if (skillFilters.length && !template.skills.some((skill) => skillFilters.includes(skill))) return false;
       if (typeFilter !== "all" && !template.types.includes(typeFilter as Question["type"])) return false;
       if (search) {
         const haystack = `${template.label} ${template.description} ${template.content}`.toLowerCase();
@@ -561,15 +594,21 @@ function QuestionTemplatesView() {
       }
       return true;
     });
-  }, [templates, skillFilter, typeFilter, search]);
+  }, [templates, skillFilters, typeFilter, search]);
 
   const skillOptions = useMemo(() => {
     const set = new Set<string>();
     templates.forEach((t) => {
-      if (t.skill) set.add(t.skill);
+      t.skills.forEach((skill) => set.add(skill));
     });
-    return Array.from(set);
+    return Array.from(set).sort();
   }, [templates]);
+
+  const toggleSkillFilter = (skill: string) => {
+    setSkillFilters((prev) => (prev.includes(skill) ? prev.filter((s) => s !== skill) : [...prev, skill]));
+  };
+
+  const clearSkillFilters = () => setSkillFilters([]);
 
   const handleSaveTemplate = (data: TemplateFormData) => {
     if (editingTemplate) {
@@ -637,19 +676,28 @@ function QuestionTemplatesView() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
-          <Select value={skillFilter} onValueChange={setSkillFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="Skill" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All skills</SelectItem>
-              {skillOptions.map((skill) => (
-                <SelectItem key={skill} value={skill}>
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-white px-3 py-2">
+            {skillOptions.map((skill) => {
+              const active = skillFilters.includes(skill);
+              return (
+                <button
+                  key={skill}
+                  type="button"
+                  onClick={() => toggleSkillFilter(skill)}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                    active ? "border-primary bg-primary/10 text-primary" : "border-gray-200 text-gray-500"
+                  }`}
+                >
                   {skill}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                </button>
+              );
+            })}
+            {skillOptions.length > 0 && (
+              <button type="button" className="text-xs text-gray-400 underline" onClick={clearSkillFilters}>
+                Clear
+              </button>
+            )}
+          </div>
           <Select value={typeFilter} onValueChange={setTypeFilter}>
             <SelectTrigger>
               <SelectValue placeholder="Question type" />
@@ -666,75 +714,75 @@ function QuestionTemplatesView() {
         </div>
       </Card>
 
-      <div className="grid gap-4">
+      <div className="rounded-2xl border border-gray-200 bg-white/80">
         {filteredTemplates.length === 0 ? (
-          <Card className="p-8 text-center text-gray-500">
-            <p>No templates match your filters.</p>
-          </Card>
+          <div className="p-8 text-center text-gray-500">No templates match your filters.</div>
         ) : (
-          filteredTemplates.map((template) => (
-            <Card key={template.id} className="p-5 space-y-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-3">
-                    <h3 className="text-xl font-semibold text-gray-900">{template.label}</h3>
-                    {template.skill && (
-                      <Badge variant="secondary" className="bg-gray-100 text-gray-700">
-                        {template.skill}
-                      </Badge>
-                    )}
+          <div className="scroll-ghost max-h-[65vh] overflow-y-auto space-y-4 p-4">
+            {filteredTemplates.map((template) => (
+              <Card key={template.id} className="p-5 space-y-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-xl font-semibold text-gray-900">{template.label}</h3>
+                      {template.skills.map((skill) => (
+                        <Badge key={`${template.id}-${skill}`} variant="secondary" className="bg-gray-100 text-gray-700">
+                          {skill}
+                        </Badge>
+                      ))}
+                    </div>
+                    <p className="text-sm text-gray-500">{template.description}</p>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
+                      {template.types.map((type) => (
+                        <span key={type} className="rounded-full bg-primary/10 px-2 py-1 text-primary">
+                          {type}
+                        </span>
+                      ))}
+                      {(template.tags ?? []).map((tag) => (
+                        <span key={tag} className="rounded-full bg-gray-100 px-2 py-1 text-gray-600">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-500">{template.description}</p>
-                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
-                    {template.types.map((type) => (
-                      <span key={type} className="rounded-full bg-primary/10 px-2 py-1 text-primary">
-                        {type}
-                      </span>
-                    ))}
-                    {(template.tags ?? []).map((tag) => (
-                      <span key={tag} className="rounded-full bg-gray-100 px-2 py-1 text-gray-600">
-                        #{tag}
-                      </span>
-                    ))}
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setEditingTemplate(template);
+                        setModalOpen(true);
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => duplicateTemplate(template.id)}>
+                      Duplicate
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={() => handleDelete(template)}>
+                      Delete
+                    </Button>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setEditingTemplate(template);
-                      setModalOpen(true);
-                    }}
-                  >
-                    Edit
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => duplicateTemplate(template.id)}>
-                    Duplicate
-                  </Button>
-                  <Button size="sm" variant="destructive" onClick={() => handleDelete(template)}>
-                    Delete
-                  </Button>
-                </div>
-              </div>
-              <pre className="rounded-xl bg-gray-50 p-4 text-sm text-gray-800 whitespace-pre-wrap">
-                {template.content}
-              </pre>
-              {template.options && template.options.length > 0 && (
-                <div>
-                  <p className="text-sm font-semibold text-gray-800 mb-2">Options</p>
-                  <ul className="space-y-1 text-sm text-gray-600">
-                    {template.options.map((option, index) => (
-                      <li key={`${template.id}-option-${index}`} className="flex items-start gap-2">
-                        <span className="font-semibold">{String.fromCharCode(65 + index)}.</span>
-                        <span>{option}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </Card>
-          ))
+                <pre className="rounded-xl bg-gray-50 p-4 text-sm text-gray-800 whitespace-pre-wrap">
+                  {template.content}
+                </pre>
+                {template.options && template.options.length > 0 && (
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800 mb-2">Options</p>
+                    <ul className="space-y-1 text-sm text-gray-600">
+                      {template.options.map((option, index) => (
+                        <li key={`${template.id}-option-${index}`} className="flex items-start gap-2">
+                          <span className="font-semibold">{String.fromCharCode(65 + index)}.</span>
+                          <span>{option}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </Card>
+            ))}
+          </div>
         )}
       </div>
 
@@ -843,6 +891,7 @@ function TestSetsView() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingSet, setEditingSet] = useState<TestSet | null>(null);
   const [setToDelete, setSetToDelete] = useState<TestSet | null>(null);
+  const [previewSet, setPreviewSet] = useState<TestSet | null>(null);
 
   const { data: testSets } = useQuery<TestSet[]>({
     queryKey: ["/api/test-sets"],
@@ -990,7 +1039,15 @@ function TestSetsView() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                         <Button
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          data-testid={`button-preview-${set.id}`}
+                          onClick={() => setPreviewSet(set)}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button
                           variant="ghost"
                           size="sm"
                           data-testid={`button-edit-${set.id}`}
@@ -998,7 +1055,8 @@ function TestSetsView() {
                             setEditingSet(set);
                             setIsFormOpen(true);
                           }}
-                        >                          <Pencil className="w-4 h-4" />
+                        >
+                          <Pencil className="w-4 h-4" />
                         </Button>
                         <Button
                           variant="ghost"
@@ -1014,7 +1072,6 @@ function TestSetsView() {
                           data-testid={`button-delete-${set.id}`}
                           className="text-destructive hover:text-destructive"
                           onClick={() => setSetToDelete(set)}
-
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -1029,7 +1086,8 @@ function TestSetsView() {
       </Card>
       {composeSet && (
         <SetCompositionModal setItem={composeSet} onClose={() => setComposeSet(null)} />
-      )} <TestSetFormModal
+      )}
+      <TestSetFormModal
         open={isFormOpen}
         onOpenChange={(open) => {
           setIsFormOpen(open);
@@ -1038,6 +1096,13 @@ function TestSetsView() {
           }
         }}
         testSet={editingSet ?? undefined}
+      />
+      <TestSetPreviewModal
+        open={Boolean(previewSet)}
+        onOpenChange={(open) => {
+          if (!open) setPreviewSet(null);
+        }}
+        testSet={previewSet}
       />
       <AlertDialog open={!!setToDelete} onOpenChange={(open) => !open && setSetToDelete(null)}>
         <AlertDialogContent>
@@ -1064,7 +1129,7 @@ function TestSetsView() {
 }
 
 // Questions View Component
-function QuestionsView() {
+function QuestionsView({ onShowTemplates }: { onShowTemplates: () => void }) {
   const [filterSkill, setFilterSkill] = useState("");
   const [filterType, setFilterType] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -1080,6 +1145,8 @@ function QuestionsView() {
   const { data: questionsData, isLoading } = useQuery<QuestionsResponse>({
     queryKey: ["/api/questions"],
   });
+  const { templates } = useQuestionTemplates();
+  const featuredTemplates = useMemo(() => templates.slice(0, 4), [templates]);
 
   const questionItems = useMemo(() => questionsData?.items ?? [], [questionsData]);
   const filteredQuestions = useMemo(() => {
@@ -1130,6 +1197,11 @@ function QuestionsView() {
           >
             <Plus className="w-4 h-4" />
             Add new question
+          </Button>
+          <Button variant="outline" asChild data-testid="button-download-question-template">
+            <a href="/templates/question-template.csv" download="question-template.csv">
+              Download Excel template
+            </a>
           </Button>
           <QuestionImportButton
             onImported={() =>
