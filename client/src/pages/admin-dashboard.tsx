@@ -1,4 +1,5 @@
 import { FormEvent, useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { SetCompositionModal } from "@/components/SetCompositionModal";
@@ -97,6 +98,7 @@ export default function AdminDashboard() {
   const [currentView, setCurrentView] = useState("sets");
   const [searchQuery, setSearchQuery] = useState("");
   const { user, logout } = useAuth();
+  const [, setLocation] = useLocation();
   const { data: stats } = useQuery<{ setsCount: number; questionsCount: number }>({
     queryKey: ["/api/stats"],
   });
@@ -151,7 +153,13 @@ export default function AdminDashboard() {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>My account</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={(event) => {
+                  event.preventDefault();
+                  setLocation("/profile");
+                }}
+                data-testid="menu-admin-profile"
+              >
                 <UserCircle className="mr-2 h-4 w-4" />
                 <span>Profile</span>
               </DropdownMenuItem>

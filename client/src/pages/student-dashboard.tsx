@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,13 +32,19 @@ import {
   LogOut,
   UserCircle,
   Settings,
+  Bell,
+  RotateCw,
+  Clock3,
+  Sparkles,
 } from "lucide-react";
-import type { TestSet, Tip } from "@shared/schema";
+import type { Activity, TestSet, Tip } from "@shared/schema";
+import { useLocation } from "wouter";
 
 export default function StudentDashboard() {
   const [currentPage, setCurrentPage] = useState("practice");
   const [searchQuery, setSearchQuery] = useState("");
   const { user, logout } = useAuth();
+  const [, setLocation] = useLocation();
 
   return (
     <div className="min-h-screen flex bg-gradient-to-br from-[#9CCC65] via-[#66BB6A] to-[#1B5E20]">
@@ -153,9 +160,7 @@ export default function StudentDashboard() {
             </div>
 
             <div className="flex items-center gap-5">
-              <div className="relative bg-gradient-to-br from-destructive to-red-600 w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold shadow-lg animate-pulse">
-                3
-              </div>
+              <NotificationBell />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <div className="w-11 h-11 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-semibold text-lg shadow-lg cursor-pointer hover:scale-110 transition-transform" data-testid="button-student-avatar">
@@ -163,20 +168,26 @@ export default function StudentDashboard() {
                   </div>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>Tài khoản của tôi</DropdownMenuLabel>
+                  <DropdownMenuLabel>My account</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      setLocation("/profile");
+                    }}
+                    data-testid="menu-student-profile"
+                  >
                     <UserCircle className="mr-2 h-4 w-4" />
-                    <span>Hồ sơ</span>
+                    <span>Profile</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem>
                     <Settings className="mr-2 h-4 w-4" />
-                    <span>Cài đặt</span>
+                    <span>Settings</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={logout} data-testid="button-logout">
                     <LogOut className="mr-2 h-4 w-4" />
-                    <span>Đăng xuất</span>
+                    <span>Sign out</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -193,6 +204,144 @@ export default function StudentDashboard() {
       </main>
     </div>
   );
+}
+
+function NotificationBell() {
+  const [open, setOpen] = useState(false);
+  const { data: notifications, isLoading, refetch } = useQuery<Activity[]>({
+    queryKey: ["/api/activities?limit=6"],
+  });
+
+  const count = notifications?.length ?? 0;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          data-testid="button-student-notifications"
+          className="relative w-12 h-12 rounded-2xl bg-white/20 border border-white/40 text-white flex items-center justify-center shadow-lg hover:-translate-y-0.5 transition-all"
+        >
+          <Bell className="w-5 h-5" />
+          {count > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[22px] h-[22px] text-xs rounded-full bg-gradient-to-br from-orange-400 to-red-500 text-white font-semibold flex items-center justify-center border border-white/60">
+              {count}
+            </span>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-96 p-0 bg-white/95 backdrop-blur-2xl rounded-3xl border border-white/60 shadow-2xl overflow-hidden"
+      >
+        <div className="px-5 py-4 border-b border-black/5 flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-gray-400">Updates</p>
+            <p className="text-lg font-semibold text-gray-900">Notifications</p>
+          </div>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="text-primary hover:bg-primary/10"
+            onClick={(event) => {
+              event.stopPropagation();
+              refetch();
+            }}
+            data-testid="button-refresh-student-notifications"
+          >
+            <RotateCw className="w-4 h-4" />
+          </Button>
+        </div>
+        <div className="max-h-[360px] overflow-y-auto divide-y divide-gray-100">
+          {isLoading ? (
+            <div className="px-5 py-10 text-center text-sm text-gray-500">Loading latest updates...</div>
+          ) : notifications && notifications.length > 0 ? (
+            notifications.map((notification) => {
+              const palette = getNotificationPalette(notification.action);
+              return (
+                <div
+                  key={notification.id}
+                  data-testid={`notification-item-${notification.id}`}
+                  className="px-5 py-4 hover:bg-primary/5 transition-colors flex items-start gap-4"
+                >
+                  <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${palette.icon}`}>
+                    {palette.iconElement}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap text-xs">
+                      <span className={`font-semibold px-2 py-0.5 rounded-full ${palette.badge}`}>
+                        {formatActionLabel(notification.action)}
+                      </span>
+                      <span className="text-gray-400 flex items-center gap-1">
+                        <Clock3 className="w-3 h-3" />
+                        {new Date(notification.timestamp).toLocaleTimeString("vi-VN")}
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900 mt-1 line-clamp-2">
+                      {notification.resourceTitle}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {formatResourceType(notification.resourceType)}
+                    </p>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="px-5 py-10 text-center text-sm text-gray-500">
+              Nothing new yet. Keep practicing and check back soon!
+            </div>
+          )}
+        </div>
+        <div className="px-5 py-3 text-right text-[11px] text-gray-400 bg-gray-50/70">
+          Auto-synced every visit
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function formatActionLabel(action: string) {
+  if (action === "created") return "New content";
+  if (action === "updated") return "Updated";
+  if (action === "deleted") return "Removed";
+  return "Activity";
+}
+
+function formatResourceType(value?: string | null) {
+  if (!value) return "General update";
+  const cleaned = value.replace(/[_-]/g, " ");
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+function getNotificationPalette(action: string) {
+  if (action === "created") {
+    return {
+      icon: "bg-emerald-100 text-emerald-600",
+      badge: "bg-emerald-50 text-emerald-700",
+      iconElement: <Sparkles className="w-5 h-5" />,
+    };
+  }
+  if (action === "updated") {
+    return {
+      icon: "bg-cyan-100 text-cyan-600",
+      badge: "bg-cyan-50 text-cyan-700",
+      iconElement: <PenTool className="w-5 h-5" />,
+    };
+  }
+  if (action === "deleted") {
+    return {
+      icon: "bg-rose-100 text-rose-600",
+      badge: "bg-rose-50 text-rose-700",
+      iconElement: <Flame className="w-5 h-5" />,
+    };
+  }
+  return {
+    icon: "bg-gray-100 text-gray-600",
+    badge: "bg-gray-50 text-gray-600",
+    iconElement: <Library className="w-5 h-5" />,
+  };
 }
 
 // Practice Page Component
@@ -264,8 +413,6 @@ function PracticePage({ searchQuery }: { searchQuery: string }) {
 }
 
 // Practice Card Component
-import { useLocation } from "wouter";
-
 function PracticeCard({ testSet }: { testSet: TestSet }) {
   const gradients = {
     Reading: "from-blue-500 to-blue-700",
@@ -487,3 +634,4 @@ function ProgressPage() {
     </div>
   );
 }
+

@@ -8,6 +8,7 @@ import {
   insertMediaSchema,
   insertUserSchema,
   type User,
+  type InsertUser,
 } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
 import { z } from "zod";
@@ -40,6 +41,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     username: user.username,
     role: user.role,
     isActive: user.isActive,
+    createdAt: user.createdAt ? new Date(user.createdAt).toISOString() : null,
+    lastLogin: user.lastLogin ? new Date(user.lastLogin).toISOString() : null,
+  });
+
+  const mapProfileResponse = (user: User) => ({
+    id: user.id,
+    username: user.username,
+    role: user.role,
+    avatar: user.avatar ?? null,
     createdAt: user.createdAt ? new Date(user.createdAt).toISOString() : null,
     lastLogin: user.lastLogin ? new Date(user.lastLogin).toISOString() : null,
   });
@@ -86,6 +96,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         id: user.id,
         username: user.username,
         role: user.role,
+        avatar: user.avatar ?? null,
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -106,7 +117,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(401).json({ error: "Not authenticated" });
     }
 
-    const user = await storage.getUser(req.session.userId);
+    const sessionUserId = String(req.session.userId);
+    const user = await storage.getUser(sessionUserId);
     if (!user) {
       return res.status(401).json({ error: "User not found" });
     }
@@ -115,7 +127,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       id: user.id,
       username: user.username,
       role: user.role,
+      avatar: user.avatar ?? null,
     });
+  });
+
+  app.get("/api/profile", requireAuth, async (req, res) => {
+    try {
+      const sessionUserId = String(req.session.userId);
+      const user = await storage.getUser(sessionUserId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json(mapProfileResponse(user));
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/profile", requireAuth, async (req, res) => {
+    try {
+      const parsed = updateProfileSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return res.status(400).json({ error: fromZodError(parsed.error).message });
+      }
+      const payload = parsed.data;
+      const sessionUserId = String(req.session.userId);
+      if (payload.username) {
+        const exists = await storage.getUserByUsername(payload.username);
+        if (exists && exists.id !== sessionUserId) {
+          return res.status(409).json({ error: "Username already exists" });
+        }
+      }
+      const updateData: Partial<InsertUser> = {};
+      if (payload.username) updateData.username = payload.username;
+      if (payload.avatar !== undefined) updateData.avatar = payload.avatar === "" ? null : payload.avatar;
+      if (payload.password) updateData.password = payload.password;
+
+      const updated = await storage.updateUser(sessionUserId, updateData);
+      if (!updated) return res.status(404).json({ error: "User not found" });
+      if (payload.username) {
+        req.session.username = updated.username;
+      }
+
+      res.json(mapProfileResponse(updated));
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: fromZodError(error).message });
+      }
+      res.status(500).json({ error: error.message });
+    }
   });
 
   // Admin user management endpoints
@@ -770,6 +830,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     timeSpentSec: z.number().int().optional(),
     attempts: z.number().int().optional(),
   });
+  const updateProfileSchema = z
+    .object({
+      username: z.string().min(3).max(50).optional(),
+      avatar: z.union([z.string().url(), z.literal("")]).optional(),
+      password: z.string().min(6).max(64).optional(),
+    })
+    .refine((val) => Object.values(val).some((field) => field !== undefined && field !== null), {
+      message: "At least one field must be provided",
+    });
 
   app.post("/api/submissions/start", requireAuth, async (req, res) => {
     try {
