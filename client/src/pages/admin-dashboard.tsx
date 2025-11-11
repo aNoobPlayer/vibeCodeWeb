@@ -83,7 +83,6 @@ import {
   FolderPlus,
 } from "lucide-react";
 import type { TestSet, Question, Tip, Media, Activity, QuestionTemplate } from "@shared/schema";
-import type { QuestionsResponse } from "@/types/api";
 import { QuestionImportButton } from "@/components/QuestionImportModal";
 import { GradingModal } from "@/components/GradingModal";
 import { useToast } from "@/hooks/use-toast";
@@ -97,6 +96,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useTemplates } from "@/hooks/admin/useTemplates";
+import { useTestSets } from "@/hooks/admin/useTestSets";
+import { useQuestions } from "@/hooks/admin/useQuestions";
+import { queryKeys } from "@/lib/queryKeys";
 
 export default function AdminDashboard() {
   const [currentView, setCurrentView] = useState("sets");
@@ -364,13 +367,9 @@ function DashboardView({ onShowTemplates }: { onShowTemplates: () => void }) {
   const { data: stats } = useQuery<any>({
     queryKey: ["/api/stats"],
   });
-  const { data: testSets } = useQuery<TestSet[]>({
-    queryKey: ["/api/test-sets"],
-  });
-  const { data: questionsData } = useQuery<QuestionsResponse>({
-    queryKey: ["/api/questions"],
-  });
-  const questionItems = useMemo(() => questionsData?.items ?? [], [questionsData]);
+  const { testSets } = useTestSets();
+  const { questionsResponse, questions } = useQuestions();
+  const questionItems = useMemo(() => questions, [questions]);
 
   const kpiData = [
     {
@@ -381,14 +380,14 @@ function DashboardView({ onShowTemplates }: { onShowTemplates: () => void }) {
     },
     {
       label: "Question bank items",
-      value: stats?.questionsCount ?? questionsData?.total ?? questionItems.length ?? 0,
+      value: stats?.questionsCount ?? questionsResponse?.total ?? questionItems.length ?? 0,
       sublabel: "Curated questions",
       testId: "kpi-questions",
     },
   ];
   const recentSets = useMemo(() => (testSets ? testSets.slice(0, 4) : []), [testSets]);
   const recentQuestions = useMemo(() => questionItems.slice(0, 5), [questionItems]);
-  const { templates } = useQuestionTemplates();
+  const { templates } = useTemplates();
   const featuredTemplates = useMemo(() => templates.slice(0, 4), [templates]);
 
   const formatQuestionType = (type: Question["type"]) => {
@@ -569,7 +568,7 @@ function DashboardView({ onShowTemplates }: { onShowTemplates: () => void }) {
 
 function QuestionTemplatesView() {
   const { toast } = useToast();
-  const { templates, isLoading: templatesLoading } = useQuestionTemplates();
+  const { templates, isLoading: templatesLoading } = useTemplates();
   const [search, setSearch] = useState("");
   const [skillFilters, setSkillFilters] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState("all");
@@ -611,7 +610,7 @@ function QuestionTemplatesView() {
       }
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.templates() });
       toast({
         title: variables.id ? "Template updated" : "Template created",
         description: variables.id
@@ -633,7 +632,7 @@ function QuestionTemplatesView() {
   const deleteTemplateMutation = useMutation({
     mutationFn: (template: QuestionTemplate) => apiRequest(`/api/templates/${template.id}`, "DELETE"),
     onSuccess: (_, template) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.templates() });
       toast({ title: "Template removed", description: `"${template.label}" was deleted.` });
     },
     onError: (error: any) => {
@@ -659,7 +658,7 @@ function QuestionTemplatesView() {
         difficulty: template.difficulty,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.templates() });
       toast({ title: "Template duplicated", description: "Feel free to tweak the copy." });
     },
   });
@@ -667,7 +666,7 @@ function QuestionTemplatesView() {
   const resetTemplatesMutation = useMutation({
     mutationFn: () => apiRequest("/api/templates/reset", "POST"),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.templates() });
       toast({ title: "Templates reset", description: "Restored the default library." });
     },
   });
@@ -886,26 +885,13 @@ function QuestionTemplatesView() {
   );
 }
 
-function useQuestionTemplates() {
-  const query = useQuery<QuestionTemplate[]>({
-    queryKey: ["/api/templates"],
-  });
-
-  return {
-    templates: query.data ?? [],
-    ...query,
-  };
-}
-
 function QuestionAssignModal({ question, onClose }: { question: Question | null; onClose: () => void }) {
   const open = Boolean(question);
   const { toast } = useToast();
   const [section, setSection] = useState("Section A");
   const [selectedSetId, setSelectedSetId] = useState<string>("");
 
-  const { data: testSets } = useQuery<TestSet[]>({
-    queryKey: ["/api/test-sets"],
-  });
+  const { testSets } = useTestSets();
 
   const { data: usedSets = [], isLoading: usageLoading } = useQuery<TestSet[]>({
     queryKey: ["question-sets", question?.id],
@@ -1186,9 +1172,7 @@ function TestSetsView() {
   const [setToDelete, setSetToDelete] = useState<TestSet | null>(null);
   const [previewSet, setPreviewSet] = useState<TestSet | null>(null);
 
-  const { data: testSets } = useQuery<TestSet[]>({
-    queryKey: ["/api/test-sets"],
-  });
+  const { testSets } = useTestSets();
 
   const filteredSets = useMemo(() => {
     if (!testSets) return [];
@@ -1204,7 +1188,7 @@ function TestSetsView() {
       await apiRequest(`/api/test-sets/${set.id}`, "DELETE");
     },
     onSuccess: (_, set) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/test-sets"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.testSets() });
       toast({
         title: "Test set deleted",
         description: `"${set.title}" has been removed.`,
@@ -1437,27 +1421,21 @@ function QuestionsView({ onShowTemplates }: { onShowTemplates: () => void }) {
   const [assignTarget, setAssignTarget] = useState<Question | null>(null);
   const { toast } = useToast();
 
-  const { data: questionsData, isLoading } = useQuery<QuestionsResponse>({
-    queryKey: ["/api/questions"],
+  const { questionsResponse, questions, isLoading } = useQuestions({
+    skill: filterSkill || undefined,
+    type: filterType || undefined,
+    search: searchQuery || undefined,
   });
-  const { templates } = useQuestionTemplates();
+  const { templates } = useTemplates();
   const featuredTemplates = useMemo(() => templates.slice(0, 4), [templates]);
 
-  const questionItems = useMemo(() => questionsData?.items ?? [], [questionsData]);
-  const filteredQuestions = useMemo(() => {
-    return questionItems.filter((q) => {
-      if (filterSkill && q.skill !== filterSkill) return false;
-      if (filterType && q.type !== filterType) return false;
-      if (searchQuery && !q.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-      return true;
-    });
-  }, [questionItems, filterSkill, filterType, searchQuery]);
+  const questionItems = useMemo(() => questions, [questions]);
   const deleteQuestionMutation = useMutation<void, Error, Question>({
     mutationFn: async (question) => {
       await apiRequest(`/api/questions/${question.id}`, "DELETE");
     },
     onSuccess: (_, question) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/questions"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.questions() });
       toast({
         title: "Question deleted",
         description: `"${question.title || question.type}" has been removed from the bank.`,
@@ -1535,7 +1513,7 @@ function QuestionsView({ onShowTemplates }: { onShowTemplates: () => void }) {
           </Button>
           <QuestionImportButton
             onImported={() =>
-              queryClient.invalidateQueries({ queryKey: ["/api/questions"] })
+              queryClient.invalidateQueries({ queryKey: queryKeys.questions() })
             }
           />
           <div className="flex gap-2 ml-auto">
@@ -1601,7 +1579,7 @@ function QuestionsView({ onShowTemplates }: { onShowTemplates: () => void }) {
                     Đang tải danh sách câu hỏi...
                   </TableCell>
                 </TableRow>
-              ) : !filteredQuestions || filteredQuestions.length === 0 ? (
+              ) : !questionItems || questionItems.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-12 text-gray-400">
                     <ClipboardList className="w-10 h-10 mx-auto mb-3" />
@@ -1609,7 +1587,7 @@ function QuestionsView({ onShowTemplates }: { onShowTemplates: () => void }) {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredQuestions.map((question, index) => (
+                questionItems.map((question, index) => (
                   <TableRow
                     key={question.id}
                     data-testid={`question-row-${question.id}`}

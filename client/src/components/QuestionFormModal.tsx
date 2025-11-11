@@ -13,6 +13,7 @@ import { insertQuestionSchema, type Question, type QuestionTemplate } from "@sha
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { z } from "zod";
 import { Sparkles } from "lucide-react";
+import { useTemplates } from "@/hooks/admin/useTemplates";
 
 const formSchema = insertQuestionSchema.extend({
   title: insertQuestionSchema.shape.title.min(1, "Title is required"),
@@ -37,9 +38,7 @@ export function QuestionFormModal({ open, onOpenChange, question }: QuestionForm
     queryKey: ["/api/media"],
     enabled: isEdit,
   });
-  const { data: templateData } = useQuery<QuestionTemplate[]>({
-    queryKey: ["/api/templates"],
-  });
+  const { templates } = useTemplates();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -118,7 +117,6 @@ export function QuestionFormModal({ open, onOpenChange, question }: QuestionForm
     form.setValue("tags", [], { shouldDirty: true });
   };
 
-  const templates = templateData ?? [];
   const [templateSkillFilters, setTemplateSkillFilters] = useState<string[]>([]);
 
   const needsMultipleChoice = questionType === "mcq_single" || questionType === "mcq_multi";
