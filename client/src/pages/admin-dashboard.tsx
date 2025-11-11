@@ -7,6 +7,8 @@ import { TestSetFormModal } from "@/components/TestSetFormModal";
 import { QuestionFormModal } from "@/components/QuestionFormModal";
 import { TipFormModal } from "@/components/TipFormModal";
 import { MediaUploadButton } from "@/components/MediaUpload";
+import { Sparkles } from "lucide-react";
+import { TemplateFormModal, type TemplateFormData } from "@/components/TemplateFormModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -83,6 +85,8 @@ import type { QuestionsResponse } from "@/types/api";
 import { QuestionImportButton } from "@/components/QuestionImportModal";
 import { GradingModal } from "@/components/GradingModal";
 import { useToast } from "@/hooks/use-toast";
+import { useQuestionTemplates } from "@/stores/questionTemplatesStore";
+import type { QuestionTemplate } from "@/types/questionTemplate";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -179,7 +183,7 @@ export default function AdminDashboard() {
 
       <div className="grid grid-cols-[280px,1fr] min-h-[calc(100vh-73px)]">
         {/* Sidebar */}
-        <aside className="sticky top-[73px] h-[calc(100vh-73px)] bg-gradient-to-b from-gray-900 to-gray-800 text-gray-100 p-4 overflow-y-auto">
+        <aside className="sticky top-[73px] h-[calc(100vh-73px)] bg-gradient-to-b from-gray-900 to-gray-800 text-gray-100 p-4 scroll-ghost overflow-y-auto">
           <div className="space-y-8">
             {/* Focus Navigation */}
             <div className="space-y-1">
@@ -265,6 +269,19 @@ export default function AdminDashboard() {
               </Button>
               <Button
                 variant="ghost"
+                data-testid="nav-templates"
+                onClick={() => setCurrentView("templates")}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-all ${
+                  currentView === "templates"
+                    ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-md"
+                    : "text-gray-300 hover:bg-white/10 hover:text-white hover:translate-x-1"
+                }`}
+              >
+                <Sparkles className="w-5 h-5" />
+                <span className="font-medium">Template studio</span>
+              </Button>
+              <Button
+                variant="ghost"
                 data-testid="nav-media"
                 onClick={() => setCurrentView("media")}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-all ${
@@ -327,12 +344,13 @@ export default function AdminDashboard() {
         </aside>
 
         {/* Main Content */}
-        <main className="p-8 overflow-y-auto bg-gray-50">
+        <main className="p-8 scroll-ghost overflow-y-auto bg-gray-50">
           {currentView === "dashboard" && <DashboardView />}
           {currentView === "sets" && <TestSetsView />}
           {currentView === "questions" && <QuestionsView />}
           {currentView === "grading" && <GradingView />}
           {currentView === "tips" && <TipsView />}
+          {currentView === "templates" && <QuestionTemplatesView />}
           {currentView === "media" && <MediaView />}
           {currentView === "users" && <UsersView />}
         </main>
@@ -513,6 +531,219 @@ function DashboardView() {
           <SkillDistributionChart />
         </Card>
       </div>
+    </div>
+  );
+}
+
+function QuestionTemplatesView() {
+  const { toast } = useToast();
+  const {
+    templates,
+    addTemplate,
+    updateTemplate,
+    deleteTemplate,
+    duplicateTemplate,
+    resetTemplates,
+  } = useQuestionTemplates();
+  const [search, setSearch] = useState("");
+  const [skillFilter, setSkillFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<QuestionTemplate | null>(null);
+
+  const filteredTemplates = useMemo(() => {
+    return templates.filter((template) => {
+      if (skillFilter !== "all" && template.skill !== skillFilter) return false;
+      if (typeFilter !== "all" && !template.types.includes(typeFilter as Question["type"])) return false;
+      if (search) {
+        const haystack = `${template.label} ${template.description} ${template.content}`.toLowerCase();
+        if (!haystack.includes(search.toLowerCase())) return false;
+      }
+      return true;
+    });
+  }, [templates, skillFilter, typeFilter, search]);
+
+  const skillOptions = useMemo(() => {
+    const set = new Set<string>();
+    templates.forEach((t) => {
+      if (t.skill) set.add(t.skill);
+    });
+    return Array.from(set);
+  }, [templates]);
+
+  const handleSaveTemplate = (data: TemplateFormData) => {
+    if (editingTemplate) {
+      updateTemplate(editingTemplate.id, data);
+      toast({
+        title: "Template updated",
+        description: `"${data.label}" is ready to use in the question builder.`,
+      });
+    } else {
+      addTemplate(data);
+      toast({
+        title: "Template created",
+        description: "You can now apply it directly in the question editor.",
+      });
+    }
+  };
+
+  const handleDelete = (template: QuestionTemplate) => {
+    const confirmed = window.confirm(`Delete "${template.label}"? This cannot be undone.`);
+    if (!confirmed) return;
+    deleteTemplate(template.id);
+    toast({
+      title: "Template removed",
+      description: `"${template.label}" was deleted.`,
+    });
+  };
+
+  return (
+    <div className="space-y-6 animate-slideIn">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-1">Template studio</h1>
+          <p className="text-gray-600 max-w-2xl">
+            Build reusable prompts, answer sets, and guidance so question authors can move faster.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            variant="ghost"
+            onClick={() => {
+              const confirmed = window.confirm("Reset to the default template library?");
+              if (!confirmed) return;
+              resetTemplates();
+              toast({ title: "Templates reset", description: "Restored the default collection." });
+            }}
+          >
+            Restore defaults
+          </Button>
+          <Button
+            onClick={() => {
+              setEditingTemplate(null);
+              setModalOpen(true);
+            }}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            New template
+          </Button>
+        </div>
+      </div>
+
+      <Card className="p-4">
+        <div className="grid gap-3 md:grid-cols-3">
+          <Input
+            placeholder="Search templates..."
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <Select value={skillFilter} onValueChange={setSkillFilter}>
+            <SelectTrigger>
+              <SelectValue placeholder="Skill" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All skills</SelectItem>
+              {skillOptions.map((skill) => (
+                <SelectItem key={skill} value={skill}>
+                  {skill}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger>
+              <SelectValue placeholder="Question type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All types</SelectItem>
+              <SelectItem value="mcq_single">MCQ (single)</SelectItem>
+              <SelectItem value="mcq_multi">MCQ (multi)</SelectItem>
+              <SelectItem value="fill_blank">Fill in the blank</SelectItem>
+              <SelectItem value="writing_prompt">Writing prompt</SelectItem>
+              <SelectItem value="speaking_prompt">Speaking prompt</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </Card>
+
+      <div className="grid gap-4">
+        {filteredTemplates.length === 0 ? (
+          <Card className="p-8 text-center text-gray-500">
+            <p>No templates match your filters.</p>
+          </Card>
+        ) : (
+          filteredTemplates.map((template) => (
+            <Card key={template.id} className="p-5 space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-xl font-semibold text-gray-900">{template.label}</h3>
+                    {template.skill && (
+                      <Badge variant="secondary" className="bg-gray-100 text-gray-700">
+                        {template.skill}
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-500">{template.description}</p>
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
+                    {template.types.map((type) => (
+                      <span key={type} className="rounded-full bg-primary/10 px-2 py-1 text-primary">
+                        {type}
+                      </span>
+                    ))}
+                    {(template.tags ?? []).map((tag) => (
+                      <span key={tag} className="rounded-full bg-gray-100 px-2 py-1 text-gray-600">
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingTemplate(template);
+                      setModalOpen(true);
+                    }}
+                  >
+                    Edit
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => duplicateTemplate(template.id)}>
+                    Duplicate
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={() => handleDelete(template)}>
+                    Delete
+                  </Button>
+                </div>
+              </div>
+              <pre className="rounded-xl bg-gray-50 p-4 text-sm text-gray-800 whitespace-pre-wrap">
+                {template.content}
+              </pre>
+              {template.options && template.options.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold text-gray-800 mb-2">Options</p>
+                  <ul className="space-y-1 text-sm text-gray-600">
+                    {template.options.map((option, index) => (
+                      <li key={`${template.id}-option-${index}`} className="flex items-start gap-2">
+                        <span className="font-semibold">{String.fromCharCode(65 + index)}.</span>
+                        <span>{option}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </Card>
+          ))
+        )}
+      </div>
+
+      <TemplateFormModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        template={editingTemplate ?? undefined}
+        onSubmit={handleSaveTemplate}
+      />
     </div>
   );
 }

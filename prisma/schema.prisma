@@ -175,6 +175,7 @@ model aptis_sets {
   authorId            Int?
   createdAt           DateTime              @default(dbgenerated("sysutcdatetime()"), map: "DF__aptis_set__creat__75A278F5")
   updatedAt           DateTime?
+  skill               String                @default("N'General'", map: "DF_aptis_sets_skill") @db.NVarChar(50)
   aptis_set_questions aptis_set_questions[]
   aptis_users         User?                 @relation(fields: [authorId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_sets_author")
   aptis_submissions   aptis_submissions[]

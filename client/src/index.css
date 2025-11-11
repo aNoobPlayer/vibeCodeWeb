@@ -331,4 +331,13 @@
   .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
     inset: -1px;
   }
+
+  .scroll-ghost {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scroll-ghost::-webkit-scrollbar {
+    display: none;
+  }
 }

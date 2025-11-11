@@ -135,7 +135,7 @@ export default function StudentDashboard() {
 
       {/* Main Content Area */}
       <main className="flex-1 m-5 bg-white/95 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/20 overflow-hidden">
-        <div className="h-full overflow-y-auto">
+        <div className="h-full scroll-ghost overflow-y-auto">
           {/* Header */}
           <header className="flex items-center justify-between p-6 border-b border-gray-200">
             <div className="flex-1 max-w-md">
@@ -253,7 +253,7 @@ function NotificationBell() {
             <RotateCw className="w-4 h-4" />
           </Button>
         </div>
-        <div className="max-h-[360px] overflow-y-auto divide-y divide-gray-100">
+        <div className="max-h-[360px] scroll-ghost overflow-y-auto divide-y divide-gray-100">
           {isLoading ? (
             <div className="px-5 py-10 text-center text-sm text-gray-500">Loading latest updates...</div>
           ) : notifications && notifications.length > 0 ? (
