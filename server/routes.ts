@@ -9,6 +9,7 @@ import {
   insertUserSchema,
   type User,
   type InsertUser,
+  type InsertQuestionTemplate,
 } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
 import { z } from "zod";
@@ -20,6 +21,22 @@ const loginSchema = z.object({
   username: z.string().min(1),
   password: z.string().min(1),
 });
+
+const QUESTION_SKILLS = ["Reading", "Listening", "Speaking", "Writing", "GrammarVocabulary", "General"] as const;
+const QUESTION_TYPES = ["mcq_single", "mcq_multi", "fill_blank", "writing_prompt", "speaking_prompt"] as const;
+
+const templateSchema = z.object({
+  label: z.string().min(1),
+  description: z.string().min(1),
+  skills: z.array(z.enum(QUESTION_SKILLS)).min(1),
+  types: z.array(z.enum(QUESTION_TYPES)).min(1),
+  content: z.string().min(1),
+  options: z.array(z.string().min(1)).optional(),
+  correctAnswers: z.array(z.string().min(1)).optional(),
+  tags: z.array(z.string().min(1)).optional(),
+  difficulty: z.string().max(20).optional().nullable(),
+});
+const templateUpdateSchema = templateSchema.partial();
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Simple auth gate for protected routes
@@ -358,6 +375,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Question template endpoints
+  app.get("/api/templates", requireAuth, async (_req, res) => {
+    try {
+      const templates = await storage.getAllTemplates();
+      res.json(templates);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/templates", requireAdmin, async (req, res) => {
+    try {
+      const parsed = templateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: fromZodError(parsed.error).message });
+      }
+      const payload: InsertQuestionTemplate = parsed.data;
+      const template = await storage.createTemplate(payload);
+      res.status(201).json(template);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/templates/:id", requireAdmin, async (req, res) => {
+    try {
+      const parsed = templateUpdateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: fromZodError(parsed.error).message });
+      }
+      const updated = await storage.updateTemplate(req.params.id, parsed.data);
+      if (!updated) {
+        return res.status(404).json({ error: "Template not found" });
+      }
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/templates/:id", requireAdmin, async (req, res) => {
+    try {
+      const success = await storage.deleteTemplate(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: "Template not found" });
+      }
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/templates/reset", requireAdmin, async (_req, res) => {
+    try {
+      await storage.resetTemplates();
+      res.json({ message: "Templates reset" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Questions endpoints
   app.get("/api/questions", async (req, res) => {
     try {
@@ -458,6 +536,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         total,
         hasMore: start + paged.length < total,
       });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/questions/:id/sets", async (req, res) => {
+    try {
+      const questionId = parseInt(req.params.id, 10);
+      if (Number.isNaN(questionId)) {
+        return res.status(400).json({ error: "Invalid question id" });
+      }
+      const result = await query(
+        `
+        SELECT s.id, s.title, s.skill, s.status, s.questionCount, s.updatedAt
+        FROM dbo.aptis_set_questions sq
+        JOIN dbo.aptis_sets s ON s.id = sq.setId
+        WHERE sq.questionId = @p0
+        ORDER BY s.updatedAt DESC
+      `,
+        [questionId],
+      );
+      res.json(result.recordset || []);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

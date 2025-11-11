@@ -11,9 +11,99 @@ import {
   type InsertMedia,
   type Activity,
   type InsertActivity,
+  type QuestionTemplate,
+  type InsertQuestionTemplate,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { query } from "./db";
+
+const DEFAULT_TEMPLATE_SEEDS: InsertQuestionTemplate[] = [
+  {
+    label: "Single sentence gap-fill",
+    description: "Learners supply one word to complete the sentence.",
+    skills: ["Reading"],
+    types: ["fill_blank"],
+    content:
+      `Complete the sentence with ONE word.\n\n` +
+      `"Studying online has completely ___ the way students access information."`,
+    correctAnswers: ["changed"],
+  },
+  {
+    label: "Short paragraph with two blanks",
+    description: "Two blanks focusing on vocabulary and grammar.",
+    skills: ["Reading"],
+    types: ["fill_blank"],
+    content:
+      `Fill in the TWO blanks with the correct words.\n\n` +
+      `"During the interview, Minh stayed ___ even when the questions became ___."`,
+    correctAnswers: ["calm", "difficult"],
+  },
+  {
+    label: "Writing - informal email",
+    description: "Prompt for a friendly email (120-150 words).",
+    skills: ["Writing"],
+    types: ["writing_prompt"],
+    content:
+      `You recently spent a weekend at your friend's house in Da Nang.\n` +
+      `Write an email to thank them. Include:\n` +
+      `- what you enjoyed most\n` +
+      `- something funny that happened\n` +
+      `- an invitation for them to visit you soon\n\n` +
+      `Write 120-150 words.`,
+  },
+  {
+    label: "Writing - opinion essay",
+    description: "Structured opinion piece with reasons and examples.",
+    skills: ["Writing"],
+    types: ["writing_prompt"],
+    content:
+      `Many people believe that teenagers should have a part-time job while studying.\n` +
+      `Do you agree or disagree?\n\n` +
+      `Write an essay explaining your opinion. Include:\n` +
+      `- at least two reasons for your view\n` +
+      `- examples or experiences to support each reason\n` +
+      `- a short conclusion with a recommendation\n\n` +
+      `Write 180-220 words.`,
+  },
+  {
+    label: "Reading - identify the writer's purpose",
+    description: "Short email that checks overall understanding of why it was written.",
+    skills: ["Reading"],
+    types: ["mcq_single"],
+    content:
+      `Read the email and choose the best answer.\n\n` +
+      `Email:\n` +
+      `"Hi team,\n` +
+      `Thanks for staying late this week. On Friday we will finish the app demo and I will order dinner for everyone.\n` +
+      `Please send me your food preferences by tomorrow afternoon.\n` +
+      `- Linh"\n\n` +
+      `What is the main purpose of the email?`,
+    options: [
+      "A. To apologize for a late project",
+      "B. To invite the team to a weekend trip",
+      "C. To thank the team and collect dinner orders",
+      "D. To cancel the demo presentation",
+    ],
+    correctAnswers: ["C. To thank the team and collect dinner orders"],
+  },
+  {
+    label: "Listening - transport announcement",
+    description: "Use with an uploaded audio clip; focuses on gist and key fact.",
+    skills: ["Listening"],
+    types: ["mcq_single"],
+    content:
+      `Listen to the station announcement (attach the audio via the media picker).\n` +
+      `Question: Why is Train 82 delayed?\n` +
+      `Choose ONE answer.`,
+    options: [
+      "A. The driver has not arrived",
+      "B. The weather has damaged the tracks",
+      "C. Maintenance crews are checking a signal problem",
+      "D. There are too many passengers boarding",
+    ],
+    correctAnswers: ["C. Maintenance crews are checking a signal problem"],
+  },
+];
 
 export interface IStorage {
   // User methods
@@ -71,6 +161,13 @@ export interface IStorage {
     speaking: number;
     writing: number;
   }>;
+
+  // Template methods
+  getAllTemplates(): Promise<QuestionTemplate[]>;
+  createTemplate(template: InsertQuestionTemplate): Promise<QuestionTemplate>;
+  updateTemplate(id: string, template: Partial<InsertQuestionTemplate>): Promise<QuestionTemplate | undefined>;
+  deleteTemplate(id: string): Promise<boolean>;
+  resetTemplates(): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -80,6 +177,7 @@ export class MemStorage implements IStorage {
   private tips: Map<string, Tip>;
   private media: Map<string, Media>;
   private activities: Map<string, Activity>;
+  private templates: Map<string, QuestionTemplate>;
 
   constructor() {
     this.users = new Map();
@@ -88,6 +186,7 @@ export class MemStorage implements IStorage {
     this.tips = new Map();
     this.media = new Map();
     this.activities = new Map();
+    this.templates = new Map();
 
     // Initialize with sample data
     this.initializeSampleData();
@@ -211,6 +310,10 @@ export class MemStorage implements IStorage {
 
     for (const tip of sampleTips) {
       await this.createTip(tip);
+    }
+
+    for (const template of DEFAULT_TEMPLATE_SEEDS) {
+      await this.createTemplate(template);
     }
   }
 
@@ -579,6 +682,63 @@ export class MemStorage implements IStorage {
       speaking: questions.filter((q) => q.skill === "Speaking").length,
       writing: questions.filter((q) => q.skill === "Writing").length,
     };
+  }
+
+  // Template methods
+  async getAllTemplates(): Promise<QuestionTemplate[]> {
+    return Array.from(this.templates.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  }
+
+  async createTemplate(template: InsertQuestionTemplate): Promise<QuestionTemplate> {
+    const id = randomUUID();
+    const now = new Date();
+    const record: QuestionTemplate = {
+      id,
+      label: template.label,
+      description: template.description,
+      skills: template.skills ?? [],
+      types: template.types ?? [],
+      content: template.content,
+      options: template.options ?? [],
+      correctAnswers: template.correctAnswers ?? [],
+      tags: template.tags ?? [],
+      difficulty: template.difficulty ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.templates.set(id, record);
+    return record;
+  }
+
+  async updateTemplate(id: string, template: Partial<InsertQuestionTemplate>): Promise<QuestionTemplate | undefined> {
+    const existing = this.templates.get(id);
+    if (!existing) return undefined;
+    const updated: QuestionTemplate = {
+      ...existing,
+      ...template,
+      skills: template.skills ?? existing.skills,
+      types: template.types ?? existing.types,
+      options: template.options ?? existing.options,
+      correctAnswers: template.correctAnswers ?? existing.correctAnswers,
+      tags: template.tags ?? existing.tags,
+      difficulty: template.difficulty ?? existing.difficulty,
+      updatedAt: new Date(),
+    };
+    this.templates.set(id, updated);
+    return updated;
+  }
+
+  async deleteTemplate(id: string): Promise<boolean> {
+    return this.templates.delete(id);
+  }
+
+  async resetTemplates(): Promise<void> {
+    this.templates.clear();
+    for (const template of DEFAULT_TEMPLATE_SEEDS) {
+      await this.createTemplate(template);
+    }
   }
 }
 
@@ -1111,6 +1271,118 @@ class SqlStorage implements IStorage {
       writing: map.writing,
     };
   }
+
+  // Template methods
+  async getAllTemplates(): Promise<QuestionTemplate[]> {
+    const result = await query(`
+      SELECT id, label, [description], skillsJson, typesJson, content, optionsJson, correctAnswersJson, tagsJson, difficulty, createdAt, updatedAt
+      FROM dbo.aptis_templates
+      ORDER BY createdAt DESC
+    `);
+    return (result.recordset || []).map(mapTemplateRow);
+  }
+
+  async createTemplate(template: InsertQuestionTemplate): Promise<QuestionTemplate> {
+    const result = await query(
+      `
+      INSERT INTO dbo.aptis_templates(label, [description], skillsJson, typesJson, content, optionsJson, correctAnswersJson, tagsJson, difficulty)
+      OUTPUT INSERTED.id, INSERTED.label, INSERTED.[description], INSERTED.skillsJson, INSERTED.typesJson,
+             INSERTED.content, INSERTED.optionsJson, INSERTED.correctAnswersJson, INSERTED.tagsJson,
+             INSERTED.difficulty, INSERTED.createdAt, INSERTED.updatedAt
+      VALUES(@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8)
+    `,
+      [
+        template.label,
+        template.description,
+        JSON.stringify(template.skills ?? []),
+        JSON.stringify(template.types ?? []),
+        template.content,
+        template.options ? JSON.stringify(template.options) : null,
+        template.correctAnswers ? JSON.stringify(template.correctAnswers) : null,
+        template.tags ? JSON.stringify(template.tags) : null,
+        template.difficulty ?? null,
+      ],
+    );
+    return mapTemplateRow(result.recordset[0]);
+  }
+
+  async updateTemplate(id: string, template: Partial<InsertQuestionTemplate>): Promise<QuestionTemplate | undefined> {
+    const idNum = parseInt(id, 10);
+    if (Number.isNaN(idNum)) return undefined;
+    const fields: string[] = [];
+    const params: any[] = [];
+
+    if (template.label !== undefined) {
+      fields.push(`label = @p${params.length}`);
+      params.push(template.label);
+    }
+    if (template.description !== undefined) {
+      fields.push(`[description] = @p${params.length}`);
+      params.push(template.description);
+    }
+    if (template.skills !== undefined) {
+      fields.push(`skillsJson = @p${params.length}`);
+      params.push(JSON.stringify(template.skills));
+    }
+    if (template.types !== undefined) {
+      fields.push(`typesJson = @p${params.length}`);
+      params.push(JSON.stringify(template.types));
+    }
+    if (template.content !== undefined) {
+      fields.push(`content = @p${params.length}`);
+      params.push(template.content);
+    }
+    if (template.options !== undefined) {
+      fields.push(`optionsJson = @p${params.length}`);
+      params.push(template.options ? JSON.stringify(template.options) : null);
+    }
+    if (template.correctAnswers !== undefined) {
+      fields.push(`correctAnswersJson = @p${params.length}`);
+      params.push(template.correctAnswers ? JSON.stringify(template.correctAnswers) : null);
+    }
+    if (template.tags !== undefined) {
+      fields.push(`tagsJson = @p${params.length}`);
+      params.push(template.tags ? JSON.stringify(template.tags) : null);
+    }
+    if (template.difficulty !== undefined) {
+      fields.push(`difficulty = @p${params.length}`);
+      params.push(template.difficulty ?? null);
+    }
+    if (fields.length === 0) {
+      return this.getTemplateById(idNum);
+    }
+    fields.push(`updatedAt = SYSUTCDATETIME()`);
+    const setClause = fields.join(", ");
+    await query(`UPDATE dbo.aptis_templates SET ${setClause} WHERE id = @p${params.length}`, [...params, idNum]);
+    return this.getTemplateById(idNum);
+  }
+
+  private async getTemplateById(id: number): Promise<QuestionTemplate | undefined> {
+    const result = await query(
+      `
+      SELECT id, label, [description], skillsJson, typesJson, content, optionsJson, correctAnswersJson, tagsJson, difficulty, createdAt, updatedAt
+      FROM dbo.aptis_templates
+      WHERE id = @p0
+    `,
+      [id],
+    );
+    const row = result.recordset?.[0];
+    return row ? mapTemplateRow(row) : undefined;
+  }
+
+  async deleteTemplate(id: string): Promise<boolean> {
+    const idNum = parseInt(id, 10);
+    if (Number.isNaN(idNum)) return false;
+    const result = await query(`DELETE FROM dbo.aptis_templates WHERE id = @p0`, [idNum]);
+    return (result.rowsAffected?.[0] ?? 0) > 0;
+  }
+
+  async resetTemplates(): Promise<void> {
+    await query(`DELETE FROM dbo.aptis_templates`);
+    for (const template of DEFAULT_TEMPLATE_SEEDS) {
+      await this.createTemplate(template);
+    }
+  }
 }
 
 function safeParseJsonArray(v: any): string[] {
@@ -1137,6 +1409,23 @@ function inferResourceTitle(details: any): string {
     if (d && typeof d.title === 'string') return d.title;
   } catch {}
   return 'Activity';
+}
+
+function mapTemplateRow(row: any): QuestionTemplate {
+  return {
+    id: String(row.id),
+    label: row.label,
+    description: row.description,
+    skills: safeParseJsonArray(row.skillsJson),
+    types: safeParseJsonArray(row.typesJson) as Question["type"][],
+    content: row.content,
+    options: safeParseJsonArray(row.optionsJson),
+    correctAnswers: safeParseJsonArray(row.correctAnswersJson),
+    tags: safeParseJsonArray(row.tagsJson),
+    difficulty: row.difficulty ?? null,
+    createdAt: row.createdAt ?? new Date(),
+    updatedAt: row.updatedAt ?? null,
+  };
 }
 
 export const storage: IStorage = process.env.DATABASE_URL ? new SqlStorage() : new MemStorage();

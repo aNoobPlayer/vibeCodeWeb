@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -80,14 +80,13 @@ import {
   UserPlus,
   ShieldCheck,
   Loader2,
+  FolderPlus,
 } from "lucide-react";
-import type { TestSet, Question, Tip, Media, Activity } from "@shared/schema";
+import type { TestSet, Question, Tip, Media, Activity, QuestionTemplate } from "@shared/schema";
 import type { QuestionsResponse } from "@/types/api";
 import { QuestionImportButton } from "@/components/QuestionImportModal";
 import { GradingModal } from "@/components/GradingModal";
 import { useToast } from "@/hooks/use-toast";
-import { useQuestionTemplates } from "@/stores/questionTemplatesStore";
-import type { QuestionTemplate } from "@/types/questionTemplate";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -570,14 +569,7 @@ function DashboardView({ onShowTemplates }: { onShowTemplates: () => void }) {
 
 function QuestionTemplatesView() {
   const { toast } = useToast();
-  const {
-    templates,
-    addTemplate,
-    updateTemplate,
-    deleteTemplate,
-    duplicateTemplate,
-    resetTemplates,
-  } = useQuestionTemplates();
+  const { templates, isLoading: templatesLoading } = useQuestionTemplates();
   const [search, setSearch] = useState("");
   const [skillFilters, setSkillFilters] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState("all");
@@ -610,30 +602,84 @@ function QuestionTemplatesView() {
 
   const clearSkillFilters = () => setSkillFilters([]);
 
-  const handleSaveTemplate = (data: TemplateFormData) => {
-    if (editingTemplate) {
-      updateTemplate(editingTemplate.id, data);
+  const saveTemplateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id?: string; data: TemplateFormData }) => {
+      if (id) {
+        await apiRequest(`/api/templates/${id}`, "PATCH", data);
+      } else {
+        await apiRequest("/api/templates", "POST", data);
+      }
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
       toast({
-        title: "Template updated",
-        description: `"${data.label}" is ready to use in the question builder.`,
+        title: variables.id ? "Template updated" : "Template created",
+        description: variables.id
+          ? "Your changes are now available in the question builder."
+          : "Template added to the shared library.",
       });
-    } else {
-      addTemplate(data);
+      setModalOpen(false);
+      setEditingTemplate(null);
+    },
+    onError: (error: any) => {
       toast({
-        title: "Template created",
-        description: "You can now apply it directly in the question editor.",
+        title: "Failed to save template",
+        description: error?.message ?? "Unknown error",
+        variant: "destructive",
       });
-    }
+    },
+  });
+
+  const deleteTemplateMutation = useMutation({
+    mutationFn: (template: QuestionTemplate) => apiRequest(`/api/templates/${template.id}`, "DELETE"),
+    onSuccess: (_, template) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      toast({ title: "Template removed", description: `"${template.label}" was deleted.` });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to delete template",
+        description: error?.message ?? "Unknown error",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const duplicateTemplateMutation = useMutation({
+    mutationFn: (template: QuestionTemplate) =>
+      apiRequest("/api/templates", "POST", {
+        label: `${template.label} (copy)`,
+        description: template.description,
+        skills: template.skills,
+        types: template.types,
+        content: template.content,
+        options: template.options,
+        correctAnswers: template.correctAnswers,
+        tags: template.tags,
+        difficulty: template.difficulty,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      toast({ title: "Template duplicated", description: "Feel free to tweak the copy." });
+    },
+  });
+
+  const resetTemplatesMutation = useMutation({
+    mutationFn: () => apiRequest("/api/templates/reset", "POST"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      toast({ title: "Templates reset", description: "Restored the default library." });
+    },
+  });
+
+  const handleSaveTemplate = async (data: TemplateFormData) => {
+    await saveTemplateMutation.mutateAsync({ id: editingTemplate?.id, data });
   };
 
   const handleDelete = (template: QuestionTemplate) => {
     const confirmed = window.confirm(`Delete "${template.label}"? This cannot be undone.`);
     if (!confirmed) return;
-    deleteTemplate(template.id);
-    toast({
-      title: "Template removed",
-      description: `"${template.label}" was deleted.`,
-    });
+    deleteTemplateMutation.mutate(template);
   };
 
   return (
@@ -651,9 +697,9 @@ function QuestionTemplatesView() {
             onClick={() => {
               const confirmed = window.confirm("Reset to the default template library?");
               if (!confirmed) return;
-              resetTemplates();
-              toast({ title: "Templates reset", description: "Restored the default collection." });
+              resetTemplatesMutation.mutate();
             }}
+            disabled={resetTemplatesMutation.isPending}
           >
             Restore defaults
           </Button>
@@ -714,85 +760,332 @@ function QuestionTemplatesView() {
         </div>
       </Card>
 
-      <div className="rounded-2xl border border-gray-200 bg-white/80">
-        {filteredTemplates.length === 0 ? (
+      <div className="rounded-2xl border border-gray-200 bg-white/80 min-h-[200px]">
+        {templatesLoading ? (
+          <div className="flex items-center justify-center gap-2 p-8 text-gray-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading templates...
+          </div>
+        ) : filteredTemplates.length === 0 ? (
           <div className="p-8 text-center text-gray-500">No templates match your filters.</div>
         ) : (
-          <div className="scroll-ghost max-h-[65vh] overflow-y-auto space-y-4 p-4">
-            {filteredTemplates.map((template) => (
-              <Card key={template.id} className="p-5 space-y-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-xl font-semibold text-gray-900">{template.label}</h3>
-                      {template.skills.map((skill) => (
-                        <Badge key={`${template.id}-${skill}`} variant="secondary" className="bg-gray-100 text-gray-700">
-                          {skill}
-                        </Badge>
-                      ))}
+          <ScrollArea className="max-h-[65vh] pr-2">
+            <div className="space-y-4 p-4 pr-4">
+              {filteredTemplates.map((template) => {
+                const options = Array.isArray(template.options) ? template.options : [];
+                const correctAnswers = Array.isArray(template.correctAnswers) ? template.correctAnswers : [];
+                const hasOptions = options.length > 0;
+                const showExpected = !hasOptions && correctAnswers.length > 0;
+                return (
+                  <Card key={template.id} className="p-5 space-y-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-xl font-semibold text-gray-900">{template.label}</h3>
+                          {template.skills.map((skill) => (
+                            <Badge key={`${template.id}-${skill}`} variant="secondary" className="bg-gray-100 text-gray-700">
+                              {skill}
+                            </Badge>
+                          ))}
+                          {template.difficulty && (
+                            <Badge variant="secondary" className="bg-amber-100 text-amber-700">
+                              {template.difficulty}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-500">{template.description}</p>
+                        <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
+                          {template.types.map((type) => (
+                            <span key={type} className="rounded-full bg-primary/10 px-2 py-1 text-primary">
+                              {type}
+                            </span>
+                          ))}
+                          {(template.tags ?? []).map((tag) => (
+                            <span key={tag} className="rounded-full bg-gray-100 px-2 py-1 text-gray-600">
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setEditingTemplate(template);
+                            setModalOpen(true);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => duplicateTemplateMutation.mutate(template)}>
+                          Duplicate
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={() => handleDelete(template)}>
+                          Delete
+                        </Button>
+                      </div>
                     </div>
-                    <p className="text-sm text-gray-500">{template.description}</p>
-                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
-                      {template.types.map((type) => (
-                        <span key={type} className="rounded-full bg-primary/10 px-2 py-1 text-primary">
-                          {type}
-                        </span>
-                      ))}
-                      {(template.tags ?? []).map((tag) => (
-                        <span key={tag} className="rounded-full bg-gray-100 px-2 py-1 text-gray-600">
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setEditingTemplate(template);
-                        setModalOpen(true);
-                      }}
-                    >
-                      Edit
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => duplicateTemplate(template.id)}>
-                      Duplicate
-                    </Button>
-                    <Button size="sm" variant="destructive" onClick={() => handleDelete(template)}>
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-                <pre className="rounded-xl bg-gray-50 p-4 text-sm text-gray-800 whitespace-pre-wrap">
-                  {template.content}
-                </pre>
-                {template.options && template.options.length > 0 && (
-                  <div>
-                    <p className="text-sm font-semibold text-gray-800 mb-2">Options</p>
-                    <ul className="space-y-1 text-sm text-gray-600">
-                      {template.options.map((option, index) => (
-                        <li key={`${template.id}-option-${index}`} className="flex items-start gap-2">
-                          <span className="font-semibold">{String.fromCharCode(65 + index)}.</span>
-                          <span>{option}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </Card>
-            ))}
-          </div>
+                    <pre className="rounded-xl bg-gray-50 p-4 text-sm text-gray-800 whitespace-pre-wrap">
+                      {template.content}
+                    </pre>
+                    {hasOptions && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-gray-800">Options</p>
+                        <ul className="grid gap-2 md:grid-cols-2">
+                          {options.map((option, index) => {
+                            const isCorrect = correctAnswers.includes(option);
+                            return (
+                              <li
+                                key={`${template.id}-option-${index}`}
+                                className="flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-700"
+                              >
+                                <span>
+                                  <span className="mr-2 font-semibold text-gray-900">
+                                    {String.fromCharCode(65 + index)}.
+                                  </span>
+                                  {option}
+                                </span>
+                                {isCorrect && (
+                                  <Badge variant="outline" className="border-emerald-200 text-emerald-600">
+                                    Correct
+                                  </Badge>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    )}
+                    {showExpected && (
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                        Expected answer: {correctAnswers.join(", ")}
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          </ScrollArea>
         )}
       </div>
 
       <TemplateFormModal
         open={modalOpen}
-        onOpenChange={setModalOpen}
-        template={editingTemplate ?? undefined}
+        onOpenChange={(open) => {
+          setModalOpen(open);
+          if (!open) setEditingTemplate(null);
+        }}
+        template={editingTemplate}
         onSubmit={handleSaveTemplate}
+        submitting={saveTemplateMutation.isPending}
+        title={editingTemplate ? "Update template" : "New template"}
+        description="Store the full prompt, answer patterns, and guidance for re-use."
       />
     </div>
+  );
+}
+
+function useQuestionTemplates() {
+  const query = useQuery<QuestionTemplate[]>({
+    queryKey: ["/api/templates"],
+  });
+
+  return {
+    templates: query.data ?? [],
+    ...query,
+  };
+}
+
+function QuestionAssignModal({ question, onClose }: { question: Question | null; onClose: () => void }) {
+  const open = Boolean(question);
+  const { toast } = useToast();
+  const [section, setSection] = useState("Section A");
+  const [selectedSetId, setSelectedSetId] = useState<string>("");
+
+  const { data: testSets } = useQuery<TestSet[]>({
+    queryKey: ["/api/test-sets"],
+  });
+
+  const { data: usedSets = [], isLoading: usageLoading } = useQuery<TestSet[]>({
+    queryKey: ["question-sets", question?.id],
+    enabled: open && Boolean(question?.id),
+    queryFn: async () => {
+      const res = await fetch(`/api/questions/${question?.id}/sets`, { credentials: "include" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  });
+
+  useEffect(() => {
+    if (open) {
+      setSection("Section A");
+      setSelectedSetId("");
+    }
+  }, [open, question?.id]);
+
+  const recommendedSets = useMemo(() => {
+    if (!testSets || !question) return [];
+    return testSets.filter((set) => set.skill === question.skill);
+  }, [testSets, question]);
+
+  const otherSets = useMemo(() => {
+    if (!testSets || !question) return [];
+    return testSets.filter((set) => set.skill !== question.skill);
+  }, [testSets, question]);
+
+  const assignMutation = useMutation({
+    mutationFn: async (setId: string) => {
+      if (!question) throw new Error("No question selected");
+      const parsedId = parseInt(question.id, 10);
+      if (Number.isNaN(parsedId)) throw new Error("Question id is not numeric");
+      const payload = {
+        questionId: parsedId,
+        section: section || "Section A",
+        score: question.points ?? 1,
+      };
+      const res = await fetch(`/api/test-sets/${setId}/questions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await res.text());
+    },
+    onSuccess: () => {
+      if (question) {
+        queryClient.invalidateQueries({ queryKey: ["question-sets", question.id] });
+      }
+      toast({ title: "Question assigned", description: "Question added to the selected test set." });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to assign question",
+        description: error?.message ?? "Unknown error",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleAssign = (setId: string) => {
+    setSelectedSetId(setId);
+    assignMutation.mutate(setId);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Assign question to test set</DialogTitle>
+          <DialogDescription>Link "{question?.title || question?.type}" directly to a set without leaving the question bank.</DialogDescription>
+        </DialogHeader>
+
+        {!question ? (
+          <p className="text-sm text-gray-500">Select a question to continue.</p>
+        ) : (
+          <div className="space-y-6">
+            <div className="rounded-xl border border-gray-200 p-4 text-sm text-gray-700">
+              <p className="font-semibold text-gray-900">{question.title || `Question ${question.id}`}</p>
+              <p className="text-xs text-gray-500 mt-1">
+                Skill: {question.skill} &bull; Type: {question.type} &bull; Points: {question.points}
+              </p>
+              <p className="mt-2 text-sm text-gray-700 line-clamp-2">{question.content}</p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <p className="text-sm font-semibold text-gray-900 mb-2">Currently used in</p>
+                {usageLoading ? (
+                  <p className="text-xs text-gray-500">Loading...</p>
+                ) : usedSets.length === 0 ? (
+                  <p className="text-xs text-gray-500">Not linked to any test set yet.</p>
+                ) : (
+                  <div className="scroll-ghost max-h-40 overflow-y-auto space-y-2">
+                    {usedSets.map((set) => (
+                      <div key={`used-${set.id}`} className="rounded-lg border border-gray-200 px-3 py-2">
+                        <p className="text-sm font-semibold text-gray-900">{set.title}</p>
+                        <p className="text-xs text-gray-500">
+                          Skill: {set.skill} &bull; Status: {set.status}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900 mb-2">Assign to set</p>
+                <div className="space-y-3">
+                  <Select value={selectedSetId} onValueChange={setSelectedSetId}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select test set" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="" disabled>
+                        Choose test set
+                      </SelectItem>
+                      {(testSets ?? []).map((set) => (
+                        <SelectItem key={set.id} value={String(set.id)}>
+                          {set.title} ({set.skill})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    value={section}
+                    onChange={(event) => setSection(event.target.value)}
+                    placeholder="Section label (e.g., Section A)"
+                  />
+                  <Button
+                    onClick={() => selectedSetId && handleAssign(selectedSetId)}
+                    disabled={!selectedSetId || assignMutation.isPending}
+                  >
+                    {assignMutation.isPending ? "Assigning..." : "Assign to selected set"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {recommendedSets.length > 0 && (
+              <div className="rounded-xl border border-gray-200 p-4">
+                <p className="text-sm font-semibold text-gray-900 mb-2">Recommended sets (matching skill)</p>
+                <div className="flex flex-wrap gap-2">
+                  {recommendedSets.map((set) => (
+                    <Button
+                      key={`rec-${set.id}`}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleAssign(String(set.id))}
+                      disabled={assignMutation.isPending}
+                    >
+                      {set.title}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {otherSets.length > 0 && (
+              <div className="rounded-xl border border-gray-200 p-4">
+                <p className="text-sm font-semibold text-gray-900 mb-2">Other available sets</p>
+                <div className="scroll-ghost max-h-48 overflow-y-auto space-y-2">
+                  {otherSets.map((set) => (
+                    <div key={`other-${set.id}`} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2 text-sm text-gray-700">
+                      <div>
+                        <p className="font-semibold text-gray-900">{set.title}</p>
+                        <p className="text-xs text-gray-500">Skill: {set.skill}</p>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => handleAssign(String(set.id))}>
+                        Add
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -961,6 +1254,7 @@ function TestSetsView() {
                 <SelectItem value="Listening">Listening</SelectItem>
                 <SelectItem value="Speaking">Speaking</SelectItem>
                 <SelectItem value="Writing">Writing</SelectItem>
+                <SelectItem value="GrammarVocabulary">Grammar &amp; Vocabulary</SelectItem>
               </SelectContent>
             </Select>
             <Select
@@ -1140,6 +1434,7 @@ function QuestionsView({ onShowTemplates }: { onShowTemplates: () => void }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [questionToDelete, setQuestionToDelete] = useState<Question | null>(null);
+  const [assignTarget, setAssignTarget] = useState<Question | null>(null);
   const { toast } = useToast();
 
   const { data: questionsData, isLoading } = useQuery<QuestionsResponse>({
@@ -1184,6 +1479,41 @@ function QuestionsView({ onShowTemplates }: { onShowTemplates: () => void }) {
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Question bank</h1>
         <p className="text-gray-600">Manage questions by skill and type</p>
       </div>
+
+      {featuredTemplates.length > 0 && (
+        <Card className="space-y-3 border-dashed border-primary/30 bg-primary/5 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-primary">Template shortcuts</p>
+              <p className="text-xs text-gray-600">
+                Start from a proven prompt. Applying a template pre-fills content, options, and tags.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={onShowTemplates}>
+              <Sparkles className="w-4 h-4 mr-1" />
+              Manage templates
+            </Button>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {featuredTemplates.map((template) => (
+              <div
+                key={`qb-template-${template.id}`}
+                className="min-w-[220px] flex-1 rounded-2xl border border-white bg-white px-4 py-3 shadow-sm"
+              >
+                <p className="text-sm font-semibold text-gray-900">{template.label}</p>
+                <p className="text-xs text-gray-500 line-clamp-2">{template.description}</p>
+                <div className="mt-2 flex flex-wrap gap-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                  {template.skills.map((skill) => (
+                    <span key={`${template.id}-${skill}`} className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <Card className="p-6">
         <div className="flex flex-wrap gap-3 mb-6">
@@ -1354,6 +1684,15 @@ function QuestionsView({ onShowTemplates }: { onShowTemplates: () => void }) {
                         <Button
                           variant="ghost"
                           size="sm"
+                          data-testid={`button-assign-question-${question.id}`}
+                          onClick={() => setAssignTarget(question)}
+                          title="Assign to test set"
+                        >
+                          <FolderPlus className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           data-testid={`button-delete-question-${question.id}`}
                           className="text-destructive hover:text-destructive"
                           onClick={() => setQuestionToDelete(question)}
@@ -1368,8 +1707,8 @@ function QuestionsView({ onShowTemplates }: { onShowTemplates: () => void }) {
             </TableBody>
           </Table>
         </div>
-      </Card>
-<QuestionFormModal
+</Card>
+      <QuestionFormModal
         open={isModalOpen}
         onOpenChange={(open) => {
           setIsModalOpen(open);
@@ -1378,6 +1717,10 @@ function QuestionsView({ onShowTemplates }: { onShowTemplates: () => void }) {
           }
         }}
         question={editingQuestion ?? undefined}
+      />
+      <QuestionAssignModal
+        question={assignTarget}
+        onClose={() => setAssignTarget(null)}
       />
       <AlertDialog open={!!questionToDelete} onOpenChange={(open) => !open && setQuestionToDelete(null)}>
         <AlertDialogContent>

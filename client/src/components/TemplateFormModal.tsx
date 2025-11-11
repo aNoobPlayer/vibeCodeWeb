@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, type KeyboardEvent } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,7 +7,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import type { QuestionTemplate } from "@/types/questionTemplate";
+import type { QuestionTemplate } from "@shared/schema";
 import type { Question } from "@shared/schema";
 
 const templateSchema = z.object({
@@ -36,10 +36,11 @@ const SKILL_OPTIONS = ["Reading", "Listening", "Speaking", "Writing", "GrammarVo
 type TemplateFormModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: TemplateFormData) => void;
+  onSubmit: (data: TemplateFormData) => Promise<void> | void;
   template?: QuestionTemplate | null;
   title?: string;
   description?: string;
+  submitting?: boolean;
 };
 
 export function TemplateFormModal({
@@ -49,6 +50,7 @@ export function TemplateFormModal({
   template,
   title = "New template",
   description = "Save reusable text, answer options, and guidance for future questions.",
+  submitting = false,
 }: TemplateFormModalProps) {
   const form = useForm<TemplateFormData>({
     resolver: zodResolver(templateSchema),
@@ -90,9 +92,8 @@ export function TemplateFormModal({
     }
   }, [form, open, template]);
 
-  const handleSubmit = (values: TemplateFormData) => {
-    onSubmit(values);
-    onOpenChange(false);
+  const handleSubmit = async (values: TemplateFormData) => {
+    await onSubmit(values);
   };
 
   const toggleType = (type: Question["type"]) => {
@@ -267,7 +268,9 @@ export function TemplateFormModal({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit">{template ? "Update template" : "Create template"}</Button>
+              <Button type="submit" disabled={submitting}>
+                {submitting ? "Saving..." : template ? "Update template" : "Create template"}
+              </Button>
             </div>
           </form>
         </Form>
@@ -285,7 +288,7 @@ type FieldListEditorProps = {
 };
 
 function FieldListEditor({ label, placeholder, values, onAdd, onRemove }: FieldListEditorProps) {
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       event.preventDefault();
       const target = event.target as HTMLInputElement;

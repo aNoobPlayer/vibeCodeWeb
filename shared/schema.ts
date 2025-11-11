@@ -46,6 +46,24 @@ export const insertQuestionSchema = createInsertSchema(questions).omit({
 export type InsertQuestion = z.infer<typeof insertQuestionSchema>;
 export type Question = typeof questions.$inferSelect;
 
+// Question Templates
+export type QuestionTemplate = {
+  id: string;
+  label: string;
+  description: string;
+  skills: string[];
+  types: Question["type"][];
+  content: string;
+  options?: string[];
+  correctAnswers?: string[];
+  tags?: string[];
+  difficulty?: string | null;
+  createdAt: string | Date;
+  updatedAt?: string | Date | null;
+};
+
+export type InsertQuestionTemplate = Omit<QuestionTemplate, "id" | "createdAt" | "updatedAt">;
+
 // Tips & Guides
 export const tips = pgTable("tips", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

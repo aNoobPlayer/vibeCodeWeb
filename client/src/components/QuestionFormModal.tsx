@@ -9,12 +9,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { insertQuestionSchema, type Question } from "@shared/schema";
+import { insertQuestionSchema, type Question, type QuestionTemplate } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { z } from "zod";
 import { Sparkles } from "lucide-react";
-import { useQuestionTemplates } from "@/stores/questionTemplatesStore";
-import type { QuestionTemplate } from "@/types/questionTemplate";
 
 const formSchema = insertQuestionSchema.extend({
   title: insertQuestionSchema.shape.title.min(1, "Title is required"),
@@ -38,6 +36,9 @@ export function QuestionFormModal({ open, onOpenChange, question }: QuestionForm
   const { data: mediaList } = useQuery<any[]>({
     queryKey: ["/api/media"],
     enabled: isEdit,
+  });
+  const { data: templateData } = useQuery<QuestionTemplate[]>({
+    queryKey: ["/api/templates"],
   });
 
   const form = useForm<FormData>({
@@ -117,7 +118,7 @@ export function QuestionFormModal({ open, onOpenChange, question }: QuestionForm
     form.setValue("tags", [], { shouldDirty: true });
   };
 
-  const { templates } = useQuestionTemplates();
+  const templates = templateData ?? [];
   const [templateSkillFilters, setTemplateSkillFilters] = useState<string[]>([]);
 
   const needsMultipleChoice = questionType === "mcq_single" || questionType === "mcq_multi";
@@ -719,7 +720,7 @@ export function QuestionFormModal({ open, onOpenChange, question }: QuestionForm
                                   type="number"
                                   placeholder="1"
                                   {...field}
-                                  value={field.value || ""}
+                                  value={field.value ?? ""}
                                   onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : 1)}
                                 />
                               </FormControl>

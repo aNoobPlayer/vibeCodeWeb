@@ -242,3 +242,20 @@ model aptis_user_progress {
 
   @@index([userId, setId, questionId], map: "IX_up_user_set_q")
 }
+
+model QuestionTemplate {
+  id                 Int       @id @default(autoincrement())
+  label              String    @db.NVarChar(255)
+  description        String
+  skillsJson         String    @db.NVarChar(Max)
+  typesJson          String    @db.NVarChar(Max)
+  content            String    @db.NVarChar(Max)
+  optionsJson        String?   @db.NVarChar(Max)
+  correctAnswersJson String?   @db.NVarChar(Max)
+  tagsJson           String?   @db.NVarChar(Max)
+  difficulty         String?   @db.NVarChar(20)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime? @updatedAt
+
+  @@map("aptis_templates")
+}

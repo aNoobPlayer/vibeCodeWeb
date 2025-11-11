@@ -181,6 +181,28 @@ const tables: TableDefinition[] = [
     `,
   },
   {
+    name: "aptis_templates",
+    createSql: `
+      IF OBJECT_ID('dbo.aptis_templates', 'U') IS NULL
+      BEGIN
+        CREATE TABLE dbo.aptis_templates (
+          id               INT IDENTITY(1,1) PRIMARY KEY,
+          label            NVARCHAR(255) NOT NULL,
+          [description]    NVARCHAR(1000) NOT NULL,
+          skillsJson       NVARCHAR(MAX) NOT NULL,
+          typesJson        NVARCHAR(MAX) NOT NULL,
+          content          NVARCHAR(MAX) NOT NULL,
+          optionsJson      NVARCHAR(MAX) NULL,
+          correctAnswersJson NVARCHAR(MAX) NULL,
+          tagsJson         NVARCHAR(MAX) NULL,
+          difficulty       NVARCHAR(20) NULL,
+          createdAt        DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME(),
+          updatedAt        DATETIME2(3) NULL
+        );
+      END
+    `,
+  },
+  {
     name: "aptis_set_questions",
     createSql: `
       IF OBJECT_ID('dbo.aptis_set_questions', 'U') IS NULL
