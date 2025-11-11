@@ -709,7 +709,7 @@ class SqlStorage implements IStorage {
   // Test Sets
   async getAllTestSets(): Promise<TestSet[]> {
     const result = await query(`
-      SELECT s.id, s.name, s.[description], s.[status], s.timeLimit, s.level, s.createdAt,
+      SELECT s.id, s.name, s.[description], s.[status], s.timeLimit, s.level, s.skill, s.createdAt,
              (SELECT COUNT(*) FROM dbo.aptis_set_questions sq WHERE sq.setId = s.id) AS questionCount
       FROM dbo.aptis_sets s
       ORDER BY s.createdAt DESC
@@ -718,7 +718,7 @@ class SqlStorage implements IStorage {
       id: String(r.id),
       title: r.name,
       description: r.description ?? null,
-      skill: 'General',
+      skill: r.skill ?? 'General',
       questionCount: r.questionCount ?? 0,
       status: r.status ?? 'published',
       difficulty: r.level ?? 'medium',
@@ -730,7 +730,7 @@ class SqlStorage implements IStorage {
   async getTestSet(id: string): Promise<TestSet | undefined> {
     const idNum = parseInt(id, 10);
     const result = await query(
-      `SELECT s.id, s.name, s.[description], s.[status], s.timeLimit, s.level, s.createdAt,
+      `SELECT s.id, s.name, s.[description], s.[status], s.timeLimit, s.level, s.skill, s.createdAt,
               (SELECT COUNT(*) FROM dbo.aptis_set_questions sq WHERE sq.setId = s.id) AS questionCount
        FROM dbo.aptis_sets s WHERE s.id = @p0`,
       [idNum]
@@ -741,7 +741,7 @@ class SqlStorage implements IStorage {
       id: String(r.id),
       title: r.name,
       description: r.description ?? null,
-      skill: 'General',
+      skill: r.skill ?? 'General',
       questionCount: r.questionCount ?? 0,
       status: r.status ?? 'published',
       difficulty: r.level ?? 'medium',
@@ -752,15 +752,16 @@ class SqlStorage implements IStorage {
 
   async createTestSet(insertTestSet: InsertTestSet): Promise<TestSet> {
     const result = await query(
-      `INSERT INTO dbo.aptis_sets(name, [description], [status], timeLimit, level)
-       OUTPUT INSERTED.id, INSERTED.name, INSERTED.[description], INSERTED.[status], INSERTED.timeLimit, INSERTED.level, INSERTED.createdAt
-       VALUES(@p0, @p1, @p2, @p3, @p4)`,
+      `INSERT INTO dbo.aptis_sets(name, [description], [status], timeLimit, level, skill)
+       OUTPUT INSERTED.id, INSERTED.name, INSERTED.[description], INSERTED.[status], INSERTED.timeLimit, INSERTED.level, INSERTED.skill, INSERTED.createdAt
+       VALUES(@p0, @p1, @p2, @p3, @p4, @p5)`,
       [
         insertTestSet.title,
         insertTestSet.description ?? null,
         insertTestSet.status ?? 'draft',
         insertTestSet.timeLimit ?? 60,
         insertTestSet.difficulty ?? 'medium',
+        insertTestSet.skill ?? 'General',
       ]
     );
     const r = result.recordset[0];
@@ -768,7 +769,7 @@ class SqlStorage implements IStorage {
       id: String(r.id),
       title: r.name,
       description: r.description ?? null,
-      skill: insertTestSet.skill ?? 'General',
+      skill: r.skill ?? 'General',
       questionCount: 0,
       status: r.status ?? 'draft',
       difficulty: r.level ?? 'medium',
@@ -787,6 +788,7 @@ class SqlStorage implements IStorage {
     if (testSet.status !== undefined) { fields.push('[status] = @p' + params.length); params.push(testSet.status); }
     if (testSet.timeLimit !== undefined) { fields.push('timeLimit = @p' + params.length); params.push(testSet.timeLimit); }
     if (testSet.difficulty !== undefined) { fields.push('level = @p' + params.length); params.push(testSet.difficulty); }
+    if (testSet.skill !== undefined) { fields.push('skill = @p' + params.length); params.push(testSet.skill); }
 
     if (fields.length === 0) return this.getTestSet(id);
 

@@ -4,6 +4,8 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { SetCompositionModal } from "@/components/SetCompositionModal";
 import { TestSetFormModal } from "@/components/TestSetFormModal";
 import { QuestionFormModal } from "@/components/QuestionFormModal";
+import { TipFormModal } from "@/components/TipFormModal";
+import { MediaUploadButton } from "@/components/MediaUpload";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -64,7 +66,6 @@ import {
   Pencil,
   Eye,
   Trash2,
-  Upload,
   Clock,
   FolderOpen,
   BarChart3,
@@ -1094,11 +1095,12 @@ function QuestionsView() {
 
 // Grading View Component
 function GradingView() {
-  const [filterSkill, setFilterSkill] = useState<string>("");
+  const [filterSkill, setFilterSkill] = useState<string>("all");
   const { data: queue, refetch } = useQuery<any[]>({
     queryKey: ["/api/admin/submissions", filterSkill],
     queryFn: async () => {
-      const url = filterSkill ? `/api/admin/submissions?status=submitted&skill=${encodeURIComponent(filterSkill)}` : `/api/admin/submissions?status=submitted`;
+      const skillParam = filterSkill === "all" ? "" : `&skill=${encodeURIComponent(filterSkill)}`;
+      const url = `/api/admin/submissions?status=submitted${skillParam}`;
       const res = await fetch(url, { credentials: 'include' });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
@@ -1121,7 +1123,7 @@ function GradingView() {
               <SelectValue placeholder="All" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All</SelectItem>
+              <SelectItem value="all">All</SelectItem>
               <SelectItem value="Writing">Writing</SelectItem>
               <SelectItem value="Speaking">Speaking</SelectItem>
             </SelectContent>
@@ -1183,18 +1185,65 @@ function GradingView() {
 
 // Tips View Component
 function TipsView() {
-  const [filterSkill, setFilterSkill] = useState("");
+  const [filterSkill, setFilterSkill] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [isTipFormOpen, setIsTipFormOpen] = useState(false);
+  const [editingTip, setEditingTip] = useState<Tip | null>(null);
+  const [viewTip, setViewTip] = useState<Tip | null>(null);
+  const [tipToDelete, setTipToDelete] = useState<Tip | null>(null);
+  const { toast } = useToast();
 
   const { data: tips } = useQuery<Tip[]>({
     queryKey: ["/api/tips"],
   });
 
-  const filteredTips = tips?.filter((tip) => {
-    if (filterSkill && tip.skill !== filterSkill) return false;
-    if (searchQuery && !tip.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    return true;
+  const filteredTips = useMemo(() => {
+    if (!tips) return [];
+    return tips.filter((tip) => {
+      if (filterSkill !== "all" && tip.skill !== filterSkill) return false;
+      if (searchQuery && !tip.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      return true;
+    });
+  }, [tips, filterSkill, searchQuery]);
+
+  const deleteTip = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest(`/api/tips/${id}`, "DELETE");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tips"] });
+      toast({ title: "Tip deleted", description: "The tip has been removed." });
+      setTipToDelete(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Unable to delete tip",
+        description: error?.message ?? "Please try again.",
+        variant: "destructive",
+      });
+    },
   });
+
+  const handleDelete = () => {
+    if (tipToDelete?.id) {
+      deleteTip.mutate(tipToDelete.id);
+    }
+  };
+
+  const badgeClassForSkill = (skill: string) => {
+    switch (skill) {
+      case "Reading":
+        return "bg-blue-100 text-blue-700";
+      case "Listening":
+        return "bg-cyan-100 text-cyan-700";
+      case "Speaking":
+        return "bg-green-100 text-green-700";
+      case "Writing":
+        return "bg-orange-100 text-orange-700";
+      default:
+        return "bg-gray-100 text-gray-700";
+    }
+  };
 
   return (
     <div className="space-y-6 animate-slideIn">
@@ -1205,7 +1254,14 @@ function TipsView() {
 
       <Card className="p-6">
         <div className="flex flex-wrap gap-3 mb-6">
-          <Button data-testid="button-add-tip" className="gap-2">
+          <Button
+            data-testid="button-add-tip"
+            className="gap-2"
+            onClick={() => {
+              setEditingTip(null);
+              setIsTipFormOpen(true);
+            }}
+          >
             <Plus className="w-4 h-4" />
             Add new tip
           </Button>
@@ -1220,6 +1276,7 @@ function TipsView() {
                 <SelectItem value="Listening">Listening</SelectItem>
                 <SelectItem value="Speaking">Speaking</SelectItem>
                 <SelectItem value="Writing">Writing</SelectItem>
+                <SelectItem value="GrammarVocabulary">Grammar &amp; Vocabulary</SelectItem>
                 <SelectItem value="General">General</SelectItem>
               </SelectContent>
             </Select>
@@ -1246,7 +1303,7 @@ function TipsView() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {!filteredTips || filteredTips.length === 0 ? (
+              {filteredTips.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-12 text-gray-400">
                     <Lightbulb className="w-10 h-10 mx-auto mb-3" />
@@ -1259,20 +1316,7 @@ function TipsView() {
                     <TableCell className="font-medium">{index + 1}</TableCell>
                     <TableCell className="font-medium text-gray-900">{tip.title}</TableCell>
                     <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={
-                          tip.skill === "Reading"
-                            ? "bg-blue-100 text-blue-700"
-                            : tip.skill === "Listening"
-                              ? "bg-cyan-100 text-cyan-700"
-                              : tip.skill === "Speaking"
-                                ? "bg-green-100 text-green-700"
-                                : tip.skill === "Writing"
-                                  ? "bg-orange-100 text-orange-700"
-                                  : "bg-gray-100 text-gray-700"
-                        }
-                      >
+                      <Badge variant="secondary" className={badgeClassForSkill(tip.skill)}>
                         {tip.skill}
                       </Badge>
                     </TableCell>
@@ -1286,10 +1330,23 @@ function TipsView() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        <Button variant="ghost" size="sm" data-testid={`button-edit-tip-${tip.id}`}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          data-testid={`button-edit-tip-${tip.id}`}
+                          onClick={() => {
+                            setEditingTip(tip);
+                            setIsTipFormOpen(true);
+                          }}
+                        >
                           <Pencil className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" data-testid={`button-view-tip-${tip.id}`}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          data-testid={`button-view-tip-${tip.id}`}
+                          onClick={() => setViewTip(tip)}
+                        >
                           <Eye className="w-4 h-4" />
                         </Button>
                         <Button
@@ -1297,6 +1354,7 @@ function TipsView() {
                           size="sm"
                           data-testid={`button-delete-tip-${tip.id}`}
                           className="text-destructive hover:text-destructive"
+                          onClick={() => setTipToDelete(tip)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -1309,6 +1367,65 @@ function TipsView() {
           </Table>
         </div>
       </Card>
+
+      <TipFormModal
+        open={isTipFormOpen}
+        tip={editingTip}
+        onOpenChange={(open) => {
+          setIsTipFormOpen(open);
+          if (!open) {
+            setEditingTip(null);
+          }
+        }}
+      />
+
+      <Dialog
+        open={Boolean(viewTip)}
+        onOpenChange={(open) => {
+          if (!open) setViewTip(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{viewTip?.title}</DialogTitle>
+            <DialogDescription>
+              {viewTip ? `${viewTip.skill} · ${viewTip.priority ?? "medium"} priority` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="text-sm text-gray-500">
+              {viewTip && new Date(viewTip.createdAt).toLocaleString("vi-VN")}
+            </div>
+            <p className="whitespace-pre-wrap text-gray-800">{viewTip?.content}</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={Boolean(tipToDelete)}
+        onOpenChange={(open) => {
+          if (!open && !deleteTip.isPending) setTipToDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete tip</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. The selected tip will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteTip.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={handleDelete}
+              disabled={deleteTip.isPending}
+            >
+              {deleteTip.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -1318,6 +1435,9 @@ function MediaView() {
   const { data: mediaFiles } = useQuery<Media[]>({
     queryKey: ["/api/media"],
   });
+  const handleUploaded = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/media"] });
+  };
 
   return (
     <div className="space-y-6 animate-slideIn">
@@ -1328,10 +1448,7 @@ function MediaView() {
 
       <Card className="p-6">
         <div className="flex justify-between items-center mb-6">
-          <Button data-testid="button-upload-media-file" className="gap-2">
-            <Upload className="w-4 h-4" />
-            Upload media
-          </Button>
+          <MediaUploadButton onUploaded={handleUploaded} />
           <div className="flex gap-2">
             <Button variant="outline" data-testid="filter-audio" size="sm">
               <Volume2 className="w-4 h-4 mr-2" />
@@ -1343,6 +1460,10 @@ function MediaView() {
             </Button>
           </div>
         </div>
+        <p className="text-xs text-muted-foreground mb-4">
+          Files are stored under <code>/uploads</code> and automatically recorded in SQL when <code>DATABASE_URL</code>{" "}
+          is configured on the server.
+        </p>
 
         {!mediaFiles || mediaFiles.length === 0 ? (
           <div className="text-center py-20 text-gray-400">

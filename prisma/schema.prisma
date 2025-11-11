@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,18 +8,24 @@ datasource db {
 }
 
 model User {
-  id           Int       @id @default(autoincrement())
-  email        String    @unique @db.NVarChar(255)
-  passwordHash String    @db.NVarChar(255)
-  name         String    @db.NVarChar(150)
-  role         String    @default("student") @db.NVarChar(20)
-  avatar       String?   @db.NVarChar(10)
-  isActive     Boolean   @default(true)
-  createdAt    DateTime  @default(now()) @db.DateTime2
-  lastLogin    DateTime? @db.DateTime2
-  auditLogs    AuditLog[]
-  media        Media[]
-  tips         Tip[]
+  id                   Int                    @id @default(autoincrement())
+  email                String                 @unique @db.NVarChar(255)
+  passwordHash         String                 @db.NVarChar(255)
+  name                 String                 @db.NVarChar(150)
+  role                 String                 @default("student") @db.NVarChar(20)
+  avatar               String?                @db.NVarChar(10)
+  isActive             Boolean                @default(true)
+  createdAt            DateTime               @default(now())
+  lastLogin            DateTime?
+  auditLogs            AuditLog[]
+  aptis_manual_grading aptis_manual_grading[]
+  media                Media[]
+  aptis_questions      aptis_questions[]
+  aptis_sets           aptis_sets[]
+  aptis_submissions    aptis_submissions[]
+  aptis_test_results   aptis_test_results[]
+  tips                 Tip[]
+  aptis_user_progress  aptis_user_progress[]
 
   @@map("aptis_users")
 }
@@ -39,32 +39,34 @@ model Setting {
   language      String    @default("vi") @db.NVarChar(10)
   notifications Boolean   @default(true)
   autoSave      Boolean   @default(true)
-  updatedAt     DateTime? @db.DateTime2
+  updatedAt     DateTime?
 
   @@map("aptis_settings")
 }
 
 model AuditLog {
-  id        BigInt    @id @default(autoincrement())
+  id        BigInt   @id @default(autoincrement())
   userId    Int?
-  action    String    @db.NVarChar(100)
-  details   String?   @db.NVarChar(Max)
-  createdAt DateTime  @default(now()) @db.DateTime2
-  user      User?     @relation(fields: [userId], references: [id], onDelete: NoAction)
+  action    String   @db.NVarChar(100)
+  details   String?  @db.NVarChar(Max)
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: NoAction)
 
   @@map("aptis_audit_logs")
 }
 
 model Media {
-  id        Int      @id @default(autoincrement())
-  name      String   @db.NVarChar(255)
-  type      String   @db.NVarChar(30)
-  size      BigInt?
-  url       String   @db.NVarChar(1000)
-  duration  Int?
-  uploaderId Int?
-  createdAt DateTime @default(now()) @db.DateTime2
-  uploader  User?    @relation(fields: [uploaderId], references: [id], onDelete: NoAction)
+  id                  Int                   @id @default(autoincrement())
+  name                String                @db.NVarChar(255)
+  type                String                @db.NVarChar(30)
+  size                BigInt?
+  url                 String
+  duration            Int?
+  uploaderId          Int?
+  createdAt           DateTime              @default(now())
+  uploader            User?                 @relation(fields: [uploaderId], references: [id], onDelete: NoAction)
+  aptis_questions     aptis_questions[]
+  aptis_set_questions aptis_set_questions[]
 
   @@map("aptis_media")
 }
@@ -77,9 +79,165 @@ model Tip {
   status    String    @default("published") @db.NVarChar(20)
   priority  String    @default("medium") @db.NVarChar(20)
   authorId  Int?
-  createdAt DateTime  @default(now()) @db.DateTime2
-  updatedAt DateTime? @db.DateTime2
+  createdAt DateTime  @default(now())
+  updatedAt DateTime?
   author    User?     @relation(fields: [authorId], references: [id], onDelete: NoAction)
 
   @@map("aptis_tips")
+}
+
+model aptis_answers {
+  id                BigInt            @id(map: "PK__aptis_an__3213E83FAEC39A0A") @default(autoincrement())
+  submissionId      BigInt
+  questionId        Int
+  answerData        String?           @db.NVarChar(Max)
+  isCorrect         Boolean?
+  score             Float?
+  createdAt         DateTime          @default(dbgenerated("sysutcdatetime()"), map: "DF__aptis_ans__creat__0E6E26BF")
+  aptis_questions   aptis_questions   @relation(fields: [questionId], references: [id], onUpdate: NoAction, map: "FK_ans_question")
+  aptis_submissions aptis_submissions @relation(fields: [submissionId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_ans_submission")
+
+  @@index([questionId], map: "IX_answers_question")
+  @@index([submissionId], map: "IX_answers_submission")
+}
+
+model aptis_manual_grading {
+  id                BigInt            @id(map: "PK__aptis_ma__3213E83F3F018488") @default(autoincrement())
+  submissionId      BigInt
+  questionId        Int
+  rubricId          Int?
+  scores            String?           @db.NVarChar(Max)
+  comment           String?           @db.NVarChar(Max)
+  gradedBy          Int?
+  gradedAt          DateTime?
+  aptis_users       User?             @relation(fields: [gradedBy], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_mg_grader")
+  aptis_questions   aptis_questions   @relation(fields: [questionId], references: [id], onUpdate: NoAction, map: "FK_mg_question")
+  aptis_rubrics     aptis_rubrics?    @relation(fields: [rubricId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_mg_rubric")
+  aptis_submissions aptis_submissions @relation(fields: [submissionId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_mg_submission")
+}
+
+model aptis_questions {
+  id                   Int                    @id(map: "PK__aptis_qu__3213E83F54772203") @default(autoincrement())
+  title                String?                @db.NVarChar(255)
+  skill                String                 @db.NVarChar(50)
+  type                 String                 @db.NVarChar(50)
+  stem                 String                 @db.NVarChar(Max)
+  optionsJson          String?                @db.NVarChar(Max)
+  answerKey            String?                @db.NVarChar(Max)
+  explain              String?                @db.NVarChar(Max)
+  difficulty           String?                @db.NVarChar(20)
+  mediaId              Int?
+  authorId             Int?
+  createdAt            DateTime               @default(dbgenerated("sysutcdatetime()"), map: "DF__aptis_que__creat__7A672E12")
+  updatedAt            DateTime?
+  aptis_answers        aptis_answers[]
+  aptis_manual_grading aptis_manual_grading[]
+  aptis_users          User?                  @relation(fields: [authorId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_q_author")
+  aptis_media          Media?                 @relation(fields: [mediaId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_q_media")
+  aptis_set_questions  aptis_set_questions[]
+  aptis_user_progress  aptis_user_progress[]
+
+  @@index([skill, type], map: "IX_questions_skill_type")
+}
+
+model aptis_rubrics {
+  id                   Int                    @id(map: "PK__aptis_ru__3213E83FC37F4524") @default(autoincrement())
+  title                String                 @db.NVarChar(200)
+  skill                String                 @db.NVarChar(50)
+  criteria             String                 @db.NVarChar(Max)
+  createdAt            DateTime               @default(dbgenerated("sysutcdatetime()"), map: "DF__aptis_rub__creat__6FE99F9F")
+  updatedAt            DateTime?
+  aptis_manual_grading aptis_manual_grading[]
+}
+
+model aptis_set_questions {
+  setId           Int
+  questionId      Int
+  section         String          @db.NVarChar(50)
+  order           Int             @default(1, map: "DF__aptis_set__order__01142BA1")
+  score           Float?
+  mediaId         Int?
+  aptis_media     Media?          @relation(fields: [mediaId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_sq_media")
+  aptis_questions aptis_questions @relation(fields: [questionId], references: [id], onUpdate: NoAction, map: "FK_sq_question")
+  aptis_sets      aptis_sets      @relation(fields: [setId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_sq_set")
+
+  @@id([setId, questionId], map: "PK_set_questions")
+  @@index([setId, section, order], map: "IX_set_questions_set_section_ord")
+}
+
+model aptis_sets {
+  id                  Int                   @id(map: "PK__aptis_se__3213E83F5A7C0539") @default(autoincrement())
+  name                String                @db.NVarChar(255)
+  description         String?
+  level               String?               @db.NVarChar(10)
+  timeLimit           Int                   @default(60, map: "DF__aptis_set__timeL__73BA3083")
+  status              String                @default("N'published'", map: "DF__aptis_set__statu__74AE54BC") @db.NVarChar(20)
+  authorId            Int?
+  createdAt           DateTime              @default(dbgenerated("sysutcdatetime()"), map: "DF__aptis_set__creat__75A278F5")
+  updatedAt           DateTime?
+  aptis_set_questions aptis_set_questions[]
+  aptis_users         User?                 @relation(fields: [authorId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_sets_author")
+  aptis_submissions   aptis_submissions[]
+  aptis_test_results  aptis_test_results[]
+  aptis_user_progress aptis_user_progress[]
+}
+
+model aptis_submissions {
+  id                   BigInt                 @id(map: "PK__aptis_su__3213E83FA697D638") @default(autoincrement())
+  userId               Int
+  setId                Int
+  startTime            DateTime?
+  submitTime           DateTime?
+  durationSec          Int?
+  autoScore            Float?
+  manualScore          Float?
+  totalScore           Float?
+  status               String                 @default("N'submitted'", map: "DF__aptis_sub__statu__06CD04F7") @db.NVarChar(20)
+  attempt              Int                    @default(1, map: "DF__aptis_sub__attem__07C12930")
+  createdAt            DateTime               @default(dbgenerated("sysutcdatetime()"), map: "DF__aptis_sub__creat__08B54D69")
+  aptis_answers        aptis_answers[]
+  aptis_manual_grading aptis_manual_grading[]
+  aptis_sets           aptis_sets             @relation(fields: [setId], references: [id], onUpdate: NoAction, map: "FK_sub_set")
+  aptis_users          User                   @relation(fields: [userId], references: [id], onUpdate: NoAction, map: "FK_sub_user")
+  aptis_test_results   aptis_test_results[]
+  aptis_user_progress  aptis_user_progress[]
+
+  @@index([setId], map: "IX_submissions_set")
+  @@index([userId], map: "IX_submissions_user")
+}
+
+model aptis_test_results {
+  id                BigInt            @id(map: "PK__aptis_te__3213E83F5228C6AB") @default(autoincrement())
+  submissionId      BigInt
+  userId            Int
+  setId             Int
+  score             Float?
+  totalQuestions    Int?
+  correctAnswers    Int?
+  timeSpentSec      Int?
+  completedAt       DateTime?
+  createdAt         DateTime          @default(dbgenerated("sysutcdatetime()"), map: "DF__aptis_tes__creat__18EBB532")
+  aptis_sets        aptis_sets        @relation(fields: [setId], references: [id], onUpdate: NoAction, map: "FK_tr_set")
+  aptis_submissions aptis_submissions @relation(fields: [submissionId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_tr_submission")
+  aptis_users       User              @relation(fields: [userId], references: [id], onUpdate: NoAction, map: "FK_tr_user")
+
+  @@index([userId, setId], map: "IX_tr_user_set")
+}
+
+model aptis_user_progress {
+  id                BigInt            @id(map: "PK__aptis_us__3213E83F6C4C779D") @default(autoincrement())
+  submissionId      BigInt
+  userId            Int
+  setId             Int
+  questionId        Int
+  isCorrect         Boolean?
+  timeSpentSec      Int?
+  attempts          Int?
+  createdAt         DateTime          @default(dbgenerated("sysutcdatetime()"), map: "DF__aptis_use__creat__1EA48E88")
+  aptis_questions   aptis_questions   @relation(fields: [questionId], references: [id], onUpdate: NoAction, map: "FK_up_question")
+  aptis_sets        aptis_sets        @relation(fields: [setId], references: [id], onUpdate: NoAction, map: "FK_up_set")
+  aptis_submissions aptis_submissions @relation(fields: [submissionId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "FK_up_submission")
+  aptis_users       User              @relation(fields: [userId], references: [id], onUpdate: NoAction, map: "FK_up_user")
+
+  @@index([userId, setId, questionId], map: "IX_up_user_set_q")
 }

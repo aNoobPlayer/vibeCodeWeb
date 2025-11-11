@@ -133,12 +133,23 @@ const tables: TableDefinition[] = [
           level       NVARCHAR(10)  NULL,
           timeLimit   INT           NOT NULL DEFAULT(60),
           [status]    NVARCHAR(20)  NOT NULL DEFAULT N'published',
+          skill       NVARCHAR(50)  NOT NULL DEFAULT N'General',
           authorId    INT           NULL,
           createdAt   DATETIME2(3)  NOT NULL DEFAULT SYSUTCDATETIME(),
           updatedAt   DATETIME2(3)  NULL,
           CONSTRAINT CK_sets_status CHECK ([status] IN (N'published',N'draft')),
           CONSTRAINT FK_sets_author FOREIGN KEY (authorId) REFERENCES dbo.aptis_users(id) ON DELETE NO ACTION
         );
+      END
+    `,
+  },
+  {
+    name: "aptis_sets_skill_column",
+    createSql: `
+      IF OBJECT_ID('dbo.aptis_sets', 'U') IS NOT NULL AND COL_LENGTH('dbo.aptis_sets', 'skill') IS NULL
+      BEGIN
+        ALTER TABLE dbo.aptis_sets
+        ADD skill NVARCHAR(50) NOT NULL CONSTRAINT DF_aptis_sets_skill DEFAULT N'General';
       END
     `,
   },
