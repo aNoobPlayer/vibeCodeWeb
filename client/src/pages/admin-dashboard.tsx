@@ -1,5 +1,5 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useLocation } from "wouter";
+import { FormEvent, useEffect, useMemo, useState, lazy, Suspense } from "react";
+import { Switch, Route, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { SetCompositionModal } from "@/components/SetCompositionModal";
@@ -7,7 +7,6 @@ import { TestSetFormModal } from "@/components/TestSetFormModal";
 import { QuestionFormModal } from "@/components/QuestionFormModal";
 import { TipFormModal } from "@/components/TipFormModal";
 import { MediaUploadButton } from "@/components/MediaUpload";
-import { Sparkles } from "lucide-react";
 import { TemplateFormModal, type TemplateFormData } from "@/components/TemplateFormModal";
 import { TestSetPreviewModal } from "@/components/TestSetPreviewModal";
 import { useAuth } from "@/contexts/AuthContext";
@@ -15,7 +14,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -23,14 +21,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -49,22 +39,15 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
+  Sparkles,
   GraduationCap,
-  Search,
-  Bell,
-  SlidersHorizontal,
-  ChevronDown,
   TrendingUp,
   Layers,
   ClipboardList,
   Lightbulb,
   FileAudio,
   Users,
-  PieChart,
-  Settings,
   Plus,
   RotateCw,
   Pencil,
@@ -75,8 +58,6 @@ import {
   BarChart3,
   Volume2,
   Image,
-  LogOut,
-  UserCircle,
   UserPlus,
   ShieldCheck,
   Loader2,
@@ -99,472 +80,136 @@ import {
 import { useTemplates } from "@/hooks/admin/useTemplates";
 import { useTestSets } from "@/hooks/admin/useTestSets";
 import { useQuestions } from "@/hooks/admin/useQuestions";
+import { useTips } from "@/hooks/admin/useTips";
+import { useMediaLibrary } from "@/hooks/admin/useMediaLibrary";
+import { useAdminUsers, type AdminUserSummary } from "@/hooks/admin/useAdminUsers";
 import { queryKeys } from "@/lib/queryKeys";
+import { AdminShell, type AdminNavItem } from "@/layouts/AdminShell";
 
+const OverviewPage = lazy(() => import("@/pages/admin/views/OverviewPage"));
 export default function AdminDashboard() {
-  const [currentView, setCurrentView] = useState("sets");
-  const [searchQuery, setSearchQuery] = useState("");
   const { user, logout } = useAuth();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { data: stats } = useQuery<{ setsCount: number; questionsCount: number }>({
     queryKey: ["/api/stats"],
   });
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Topbar */}
-      <header className="sticky top-0 z-30 flex items-center justify-between gap-6 bg-white px-6 py-4 border-b border-gray-200 shadow-sm">
-        <div className="flex items-center gap-3">
-          <GraduationCap className="w-6 h-6 bg-gradient-to-br from-primary to-accent bg-clip-text text-transparent" />
-          <span className="text-xl font-bold text-primary">APTIS KEYS</span>
-          <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/20 hover-elevate">
-            PRO
+  useEffect(() => {
+    if (location === "/admin" || location === "/admin/") {
+      setLocation("/admin/dashboard");
+    }
+  }, [location, setLocation]);
+
+  const navItems = useMemo<AdminNavItem[]>(
+    () => [
+      {
+        label: "Overview",
+        href: "/admin/dashboard",
+        icon: TrendingUp,
+        testId: "nav-dashboard",
+      },
+      {
+        label: "Test sets",
+        href: "/admin/sets",
+        icon: Layers,
+        testId: "nav-sets",
+        badge: (
+          <Badge className="bg-gray-800 text-gray-200 text-xs">
+            {stats?.setsCount ?? 0}
           </Badge>
-        </div>
+        ),
+      },
+      {
+        label: "Question bank",
+        href: "/admin/questions",
+        icon: ClipboardList,
+        testId: "nav-questions",
+        badge: (
+          <Badge className="bg-gray-800 text-gray-200 text-xs">
+            {stats?.questionsCount ?? 0}
+          </Badge>
+        ),
+      },
+      {
+        label: "Templates",
+        href: "/admin/templates",
+        icon: Sparkles,
+        testId: "nav-templates",
+      },
+      {
+        label: "Grading",
+        href: "/admin/grading",
+        icon: Pencil,
+        testId: "nav-grading",
+      },
+      {
+        label: "Tips & guides",
+        href: "/admin/tips",
+        icon: Lightbulb,
+        testId: "nav-tips",
+      },
+      {
+        label: "Media",
+        href: "/admin/media",
+        icon: Image,
+        testId: "nav-media",
+      },
+      {
+        label: "Users",
+        href: "/admin/users",
+        icon: Users,
+        testId: "nav-users",
+      },
+    ],
+    [stats?.questionsCount, stats?.setsCount],
+  );
 
-        <div className="flex-1 max-w-lg relative">
-          <Input
-            data-testid="input-global-search"
-            placeholder="Search across the platform..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-gray-50 border-gray-200"
-          />
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-        </div>
+  return (
+    <AdminShell navItems={navItems} user={user} onLogout={logout}>
+      <Suspense fallback={<RouteFallback />}>
+        <Switch>
+          <Route path="/admin/dashboard">
+            <OverviewPage onShowTemplates={() => setLocation("/admin/templates")} />
+          </Route>
+        <Route path="/admin/sets">
+          <TestSetsView />
+        </Route>
+        <Route path="/admin/questions">
+          <QuestionsView onShowTemplates={() => setLocation("/admin/templates")} />
+        </Route>
+        <Route path="/admin/templates">
+          <QuestionTemplatesView />
+        </Route>
+        <Route path="/admin/grading">
+          <GradingView />
+        </Route>
+        <Route path="/admin/tips">
+          <TipsView />
+        </Route>
+        <Route path="/admin/media">
+          <MediaView />
+        </Route>
+        <Route path="/admin/users">
+          <UsersView />
+        </Route>
+          <Route>
+            <OverviewPage onShowTemplates={() => setLocation("/admin/templates")} />
+          </Route>
+        </Switch>
+      </Suspense>
+    </AdminShell>
+  );
+}
 
-        <div className="flex items-center gap-3">
-          <Button
-            data-testid="button-notifications"
-            variant="ghost"
-            size="icon"
-            className="relative"
-          >
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full animate-pulse"></span>
-          </Button>
-          <Button data-testid="button-settings" variant="ghost" size="icon">
-            <SlidersHorizontal className="w-5 h-5" />
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <div className="flex items-center gap-3 px-4 py-2 rounded-full bg-gray-100 hover-elevate cursor-pointer" data-testid="button-user-menu">
-                <Avatar className="w-8 h-8">
-                  <AvatarImage src="https://i.pravatar.cc/40" alt="Admin" />
-                  <AvatarFallback>AD</AvatarFallback>
-                </Avatar>
-                <span className="font-medium text-sm">{user?.username || "Admin"}</span>
-                <ChevronDown className="w-3 h-3" />
-              </div>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>My account</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={(event) => {
-                  event.preventDefault();
-                  setLocation("/profile");
-                }}
-                data-testid="menu-admin-profile"
-              >
-                <UserCircle className="mr-2 h-4 w-4" />
-                <span>Profile</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Settings</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={logout} data-testid="button-logout">
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>Sign out</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </header>
-
-      <div className="grid grid-cols-[280px,1fr] min-h-[calc(100vh-73px)]">
-        {/* Sidebar */}
-        <aside className="sticky top-[73px] h-[calc(100vh-73px)] bg-gradient-to-b from-gray-900 to-gray-800 text-gray-100 p-4 scroll-ghost overflow-y-auto">
-          <div className="space-y-8">
-            {/* Focus Navigation */}
-            <div className="space-y-1">
-              <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 px-3 mb-2">
-                Focus areas
-              </div>
-              <Button
-                variant="ghost"
-                data-testid="nav-sets"
-                onClick={() => setCurrentView("sets")}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-all ${
-                  currentView === "sets"
-                    ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-md"
-                    : "text-gray-300 hover:bg-white/10 hover:text-white hover:translate-x-1"
-                }`}
-              >
-                <Layers className="w-5 h-5" />
-                <span className="font-medium">Test sets</span>
-                <Badge className="ml-auto bg-gray-700 text-gray-300" data-testid="badge-sets-count">
-                  {stats?.setsCount ?? 0}
-                </Badge>
-              </Button>
-              <Button
-                variant="ghost"
-                data-testid="nav-questions"
-                onClick={() => setCurrentView("questions")}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-all ${
-                  currentView === "questions"
-                    ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-md"
-                    : "text-gray-300 hover:bg-white/10 hover:text-white hover:translate-x-1"
-                }`}
-              >
-                <ClipboardList className="w-5 h-5" />
-                <span className="font-medium">Question bank</span>
-                <Badge className="ml-auto bg-gray-700 text-gray-300" data-testid="badge-questions-count">
-                  {stats?.questionsCount ?? 0}
-                </Badge>
-              </Button>
-            </div>
-            {/* Workspace Tools */}
-            <div className="space-y-1 border-t border-white/10 pt-6">
-              <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 px-3 mb-2">
-                Workspace
-              </div>
-              <Button
-                variant="ghost"
-                data-testid="nav-dashboard"
-                onClick={() => setCurrentView("dashboard")}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-all ${
-                  currentView === "dashboard"
-                    ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-md"
-                    : "text-gray-300 hover:bg-white/10 hover:text-white hover:translate-x-1"
-                }`}
-              >
-                <TrendingUp className="w-5 h-5" />
-                <span className="font-medium">Overview</span>
-              </Button>
-              <Button
-                variant="ghost"
-                data-testid="nav-grading"
-                onClick={() => setCurrentView("grading")}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-all ${
-                  currentView === "grading"
-                    ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-md"
-                    : "text-gray-300 hover:bg-white/10 hover:text-white hover:translate-x-1"
-                }`}
-              >
-                <Pencil className="w-5 h-5" />
-                <span className="font-medium">Grading</span>
-              </Button>
-              <Button
-                variant="ghost"
-                data-testid="nav-tips"
-                onClick={() => setCurrentView("tips")}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-all ${
-                  currentView === "tips"
-                    ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-md"
-                    : "text-gray-300 hover:bg-white/10 hover:text-white hover:translate-x-1"
-                }`}
-              >
-                <Lightbulb className="w-5 h-5" />
-                <span className="font-medium">Tips & guides</span>
-              </Button>
-              <Button
-                variant="ghost"
-                data-testid="nav-templates"
-                onClick={() => setCurrentView("templates")}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-all ${
-                  currentView === "templates"
-                    ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-md"
-                    : "text-gray-300 hover:bg-white/10 hover:text-white hover:translate-x-1"
-                }`}
-              >
-                <Sparkles className="w-5 h-5" />
-                <span className="font-medium">Template studio</span>
-              </Button>
-              <Button
-                variant="ghost"
-                data-testid="nav-media"
-                onClick={() => setCurrentView("media")}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-all ${
-                  currentView === "media"
-                    ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-md"
-                    : "text-gray-300 hover:bg-white/10 hover:text-white hover:translate-x-1"
-                }`}
-              >
-                <FileAudio className="w-5 h-5" />
-                <span className="font-medium">Media library</span>
-              </Button>
-            </div>
-
-            {/* System Administration */}
-            <div className="space-y-1">
-              <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 px-3 mb-3">
-                System administration
-              </div>
-              <Button
-                variant="ghost"
-                data-testid="nav-users"
-                onClick={() => setCurrentView("users")}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-all ${
-                  currentView === "users"
-                    ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-md"
-                    : "text-gray-300 hover:bg-white/10 hover:text-white hover:translate-x-1"
-                }`}
-              >
-                <Users className="w-5 h-5" />
-                <span className="font-medium">Users</span>
-              </Button>
-              <Button
-                variant="ghost"
-                data-testid="nav-reports"
-                onClick={() => setCurrentView("reports")}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-all ${
-                  currentView === "reports"
-                    ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-md"
-                    : "text-gray-300 hover:bg-white/10 hover:text-white hover:translate-x-1"
-                }`}
-              >
-                <PieChart className="w-5 h-5" />
-                <span className="font-medium">Reports & analytics</span>
-              </Button>
-              <Button
-                variant="ghost"
-                data-testid="nav-settings"
-                onClick={() => setCurrentView("settings")}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-all ${
-                  currentView === "settings"
-                    ? "bg-gradient-to-r from-primary to-primary/80 text-white shadow-md"
-                    : "text-gray-300 hover:bg-white/10 hover:text-white hover:translate-x-1"
-                }`}
-              >
-                <Settings className="w-5 h-5" />
-                <span className="font-medium">Settings</span>
-              </Button>
-            </div>
-          </div>
-        </aside>
-
-        {/* Main Content */}
-        <main className="p-8 scroll-ghost overflow-y-auto bg-gray-50">
-          {currentView === "dashboard" && <DashboardView onShowTemplates={() => setCurrentView("templates")} />}
-          {currentView === "sets" && <TestSetsView />}
-          {currentView === "questions" && <QuestionsView onShowTemplates={() => setCurrentView("templates")} />}
-          {currentView === "grading" && <GradingView />}
-          {currentView === "tips" && <TipsView />}
-          {currentView === "templates" && <QuestionTemplatesView />}
-          {currentView === "media" && <MediaView />}
-          {currentView === "users" && <UsersView />}
-        </main>
-      </div>
+function RouteFallback() {
+  return (
+    <div className="py-10 text-center text-sm text-gray-500">
+      Loading admin tools...
     </div>
   );
 }
 
 // Dashboard View Component
-function DashboardView({ onShowTemplates }: { onShowTemplates: () => void }) {
-  const { data: stats } = useQuery<any>({
-    queryKey: ["/api/stats"],
-  });
-  const { testSets } = useTestSets();
-  const { questionsResponse, questions } = useQuestions();
-  const questionItems = useMemo(() => questions, [questions]);
-
-  const kpiData = [
-    {
-      label: "Total test sets",
-      value: stats?.setsCount || 0,
-      sublabel: "Ready to assign",
-      testId: "kpi-sets",
-    },
-    {
-      label: "Question bank items",
-      value: stats?.questionsCount ?? questionsResponse?.total ?? questionItems.length ?? 0,
-      sublabel: "Curated questions",
-      testId: "kpi-questions",
-    },
-  ];
-  const recentSets = useMemo(() => (testSets ? testSets.slice(0, 4) : []), [testSets]);
-  const recentQuestions = useMemo(() => questionItems.slice(0, 5), [questionItems]);
-  const { templates } = useTemplates();
-  const featuredTemplates = useMemo(() => templates.slice(0, 4), [templates]);
-
-  const formatQuestionType = (type: Question["type"]) => {
-    switch (type) {
-      case "mcq_single":
-        return "MCQ (single answer)";
-      case "mcq_multi":
-        return "MCQ (multiple answers)";
-      case "fill_blank":
-        return "Fill in the blanks";
-      case "writing_prompt":
-        return "Writing prompt";
-      case "speaking_prompt":
-        return "Speaking prompt";
-      default:
-        return type;
-    }
-  };
-
-  return (
-    <div className="space-y-8 animate-slideIn">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Assessment content</h1>
-        <p className="text-gray-600">
-          Monitor your test sets and question bank in one place to keep exam materials aligned.
-        </p>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {kpiData.map((kpi) => (
-          <Card
-            key={kpi.testId}
-            data-testid={kpi.testId}
-            className="relative overflow-hidden hover:-translate-y-1 transition-all duration-300 hover:shadow-lg"
-          >
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-accent"></div>
-            <div className="p-6">
-              <div className="text-sm font-medium text-gray-600 mb-1">{kpi.label}</div>
-              <div className="text-4xl font-bold text-primary my-3">{kpi.value}</div>
-              <div className="text-xs text-gray-500">{kpi.sublabel}</div>
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      <Card className="p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick actions</h3>
-        <div className="flex flex-wrap gap-3">
-          <Button data-testid="button-create-set" className="gap-2">
-            <Plus className="w-4 h-4" />
-            Create new test set
-          </Button>
-          <Button variant="secondary" data-testid="button-create-question" className="gap-2">
-            <ClipboardList className="w-4 h-4" />
-            Add question
-          </Button>
-          <div>
-            <QuestionImportButton />
-          </div>
-        </div>
-      </Card>
-
-      {featuredTemplates.length > 0 && (
-        <Card className="p-5 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-gray-900">Template quick list</p>
-              <p className="text-xs text-gray-500">Review popular templates before creating a new question.</p>
-            </div>
-            <Button variant="ghost" size="sm" onClick={onShowTemplates}>
-              <Sparkles className="w-4 h-4 mr-1" />
-              Open template studio
-            </Button>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            {featuredTemplates.map((template) => (
-              <div key={`featured-${template.id}`} className="rounded-xl border bg-white p-3 shadow-sm">
-                <p className="text-sm font-semibold text-gray-900">{template.label}</p>
-                <p className="text-xs text-gray-500">{template.description}</p>
-                <div className="mt-2 flex flex-wrap gap-1 text-[10px] uppercase text-gray-400">
-                  {template.skills.map((skill) => (
-                    <span key={`${template.id}-${skill}`} className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <Card className="p-6">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">Latest test sets</h3>
-              <p className="text-sm text-gray-500 mt-1">Recently updated collections</p>
-            </div>
-          </div>
-          {recentSets.length === 0 ? (
-            <div className="text-sm text-gray-500">No test sets yet. Create one to get started.</div>
-          ) : (
-            <ul className="space-y-4">
-              {recentSets.map((set) => (
-                <li key={set.id} className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="font-medium text-gray-900">{set.title}</p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {set.skill} · Updated {new Date(set.updatedAt).toLocaleDateString("vi-VN")}
-                    </p>
-                  </div>
-                  <Badge variant={set.status === "published" ? "default" : "secondary"}>
-                    {set.status === "published" ? "Published" : "Draft"}
-                  </Badge>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-        <Card className="p-6">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">Recent question bank entries</h3>
-              <p className="text-sm text-gray-500 mt-1">Fresh content across skills</p>
-            </div>
-          </div>
-          {recentQuestions.length === 0 ? (
-            <div className="text-sm text-gray-500">No questions found. Add a question to populate the bank.</div>
-          ) : (
-            <ul className="space-y-4">
-              {recentQuestions.map((question) => (
-                <li key={question.id} className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="font-medium text-gray-900">{question.title}</p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {question.skill} · {formatQuestionType(question.type)}
-                    </p>
-                  </div>
-                  <Badge variant="outline" className="text-xs">
-                    {question.points} pts
-                  </Badge>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </div>
-
-      {/* Activity and Charts */}
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <Card className="p-6">
-          <div className="flex items-start justify-between mb-6">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">Recent activity</h3>
-              <p className="text-sm text-gray-500 mt-1">Latest changes across sets and questions</p>
-            </div>
-            <Button variant="secondary" size="icon" data-testid="button-refresh-activity">
-              <RotateCw className="w-4 h-4" />
-            </Button>
-          </div>
-          <ActivityFeed />
-        </Card>
-
-        <Card className="p-6">
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold text-gray-900">Question distribution by skill</h3>
-            <p className="text-sm text-gray-500 mt-1">Track balance across the bank</p>
-          </div>
-          <SkillDistributionChart />
-        </Card>
-      </div>
-    </div>
-  );
-}
 
 function QuestionTemplatesView() {
   const { toast } = useToast();
@@ -1825,8 +1470,9 @@ function TipsView() {
   const [tipToDelete, setTipToDelete] = useState<Tip | null>(null);
   const { toast } = useToast();
 
-  const { data: tips } = useQuery<Tip[]>({
-    queryKey: ["/api/tips"],
+  const { tips } = useTips({
+    skill: filterSkill !== "all" ? filterSkill : undefined,
+    search: searchQuery || undefined,
   });
 
   const filteredTips = useMemo(() => {
@@ -1843,7 +1489,7 @@ function TipsView() {
       await apiRequest(`/api/tips/${id}`, "DELETE");
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tips"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tips() });
       toast({ title: "Tip deleted", description: "The tip has been removed." });
       setTipToDelete(null);
     },
@@ -2064,11 +1710,9 @@ function TipsView() {
 
 // Media View Component
 function MediaView() {
-  const { data: mediaFiles } = useQuery<Media[]>({
-    queryKey: ["/api/media"],
-  });
+  const { mediaFiles } = useMediaLibrary();
   const handleUploaded = () => {
-    queryClient.invalidateQueries({ queryKey: ["/api/media"] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.media() });
   };
 
   return (
@@ -2146,15 +1790,6 @@ function MediaView() {
   );
 }
 
-type AdminUserSummary = {
-  id: string;
-  username: string;
-  role: "admin" | "student";
-  isActive?: boolean;
-  createdAt?: string | null;
-  lastLogin?: string | null;
-};
-
 function UsersView() {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
@@ -2170,9 +1805,7 @@ function UsersView() {
     },
   );
 
-  const { data: users, isLoading } = useQuery<AdminUserSummary[]>({
-    queryKey: ["/api/admin/users"],
-  });
+  const { users, isLoading } = useAdminUsers();
 
   const createUserMutation = useMutation<
     AdminUserSummary,
@@ -2184,7 +1817,7 @@ function UsersView() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminUsers() });
       toast({
         title: "Tạo tài khoản thành công",
         description: "Người dùng mới đã được thêm vào hệ thống.",
@@ -2211,7 +1844,7 @@ function UsersView() {
       return res.json();
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminUsers() });
       toast({
         title: "Cập nhật quyền thành công",
         description: `${variables.username} đã được chuyển sang nhóm ${
@@ -2233,7 +1866,7 @@ function UsersView() {
       await apiRequest(`/api/admin/users/${payload.id}`, "DELETE");
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminUsers() });
       setUserToDelete(null);
       toast({
         title: "Đã xóa người dùng",
@@ -2582,3 +2215,6 @@ function UsersView() {
     </div>
   );
 }
+
+
+

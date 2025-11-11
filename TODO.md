@@ -32,8 +32,8 @@ This backlog tracks every improvement idea that emerged from the system review. 
 
 ## 2. Modular Admin UI
 2.1 **Routing & layout groundwork**
-- [ ] Create `client/src/layouts/AdminShell.tsx` housing sidebar/topbar
-- [ ] Move current dashboard content into route components (`/admin/dashboard`, `/admin/questions`, etc.)
+- [x] Create `client/src/layouts/AdminShell.tsx` housing sidebar/topbar
+- [x] Move current dashboard content into route components (`/admin/dashboard`, `/admin/questions`, etc.)
 - [ ] Update router to lazy-load each admin page
 
 2.2 **Feature slices**
@@ -102,12 +102,14 @@ This backlog tracks every improvement idea that emerged from the system review. 
 
 ## 6. State & Data Layer Cohesion
 6.1 **React Query registry**
-- [ ] Create `client/src/lib/queryKeys.ts` exporting typed keys
+- [x] Create `client/src/lib/queryKeys.ts` exporting typed keys
 - [ ] Centralize shared query hook factories (`createEntityQueryHook`)
 
 6.2 **Domain hooks**
-- [ ] `useQuestions`, `useTestSets`, `useTemplates`, etc., returning data + mutations
-- [ ] Replace inline `useQuery`/`useMutation` usage across admin pages
+- [x] `useQuestions`, `useTestSets`, `useTemplates`, etc., returning data hooks
+- [ ] Add mutation helpers per domain (create/update/delete abstractions)
+- [x] Replace inline `useQuery` usage across admin pages for templates/questions/sets/tips/media/users
+- [ ] Migrate remaining sections (grading queue, activities, etc.) to shared hooks
 
 6.3 **Server-driven filtering**
 - [ ] Extend `/api/questions` and `/api/test-sets` to accept filter params
