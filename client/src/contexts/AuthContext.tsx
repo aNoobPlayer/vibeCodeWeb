@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 
 interface User {
@@ -21,6 +21,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const authRequestId = useRef(0);
   const [, setLocation] = useLocation();
 
   useEffect(() => {
@@ -28,6 +29,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const checkAuth = async () => {
+    const requestId = ++authRequestId.current;
     try {
       const response = await fetch("/api/auth/me", {
         credentials: "include",
@@ -35,11 +37,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (response.ok) {
         const userData = await response.json();
+        if (requestId !== authRequestId.current) return;
         setUser(userData);
       } else {
+        if (requestId !== authRequestId.current) return;
         setUser(null);
       }
     } catch (error) {
+      if (requestId !== authRequestId.current) return;
       setUser(null);
     } finally {
       setLoading(false);
@@ -62,6 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const userData = await response.json();
+    authRequestId.current += 1;
     setUser(userData);
 
     if (userData.role === "admin") {
@@ -76,6 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       method: "POST",
       credentials: "include",
     });
+    authRequestId.current += 1;
     setUser(null);
     setLocation("/");
   };

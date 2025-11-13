@@ -16,6 +16,8 @@ import { z } from "zod";
 import { query } from "./db";
 import multer from 'multer';
 import path from 'path';
+import * as XLSX from "xlsx";
+import { isR2Enabled, uploadBufferToR2, getR2PublicUrl, buildR2Key } from "./lib/r2";
 
 const loginSchema = z.object({
   username: z.string().min(1),
@@ -52,6 +54,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     next();
   }
+
+  const uploadDir = path.resolve(import.meta.dirname, "..", "uploads");
+  const storageM = multer.diskStorage({
+    destination: (_req: any, _file: any, cb: any) => cb(null, uploadDir),
+    filename: (_req: any, file: any, cb: any) => {
+      const ts = Date.now();
+      const safe = file.originalname.replace(/[^a-zA-Z0-9_.-]/g, "_");
+      cb(null, `${ts}_${safe}`);
+    },
+  });
+  const uploadStorage = isR2Enabled ? multer.memoryStorage() : storageM;
+  const upload = multer({ storage: uploadStorage });
+  const excelUpload = multer({ storage: multer.memoryStorage() });
 
   const mapUserResponse = (user: User) => ({
     id: user.id,
@@ -681,6 +696,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/admin/questions/import-excel", requireAdmin, excelUpload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+      const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) return res.status(400).json({ error: "Excel file has no sheets" });
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: "" });
+
+      let imported = 0;
+      const errors: Array<{ row: number; error: string }> = [];
+
+      const listFromCell = (value: any) => {
+        if (Array.isArray(value)) return value.map((item) => String(item)).filter((v) => v.trim().length > 0);
+        if (typeof value === "string" && value.trim().length > 0) {
+          return value
+            .split(/[,;|\n\r]+/)
+            .map((item) => item.trim())
+            .filter(Boolean);
+        }
+        return [];
+      };
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const title = row.title || row.Title || "";
+        const skill = row.skill || row.Skill || "";
+        const type = row.type || row.Type || "";
+        const content = row.content || row.Content || "";
+
+        if (!title || !skill || !type || !content) {
+          errors.push({ row: i + 2, error: "Missing required fields (title, skill, type, content)" });
+          continue;
+        }
+
+        const options = listFromCell(row.options || row.Options);
+        const correctAnswers = listFromCell(row.correctAnswers || row.CorrectAnswers);
+        const tags = listFromCell(row.tags || row.Tags);
+        const explanation = row.explanation || row.Explanation || "";
+        const mediaUrl = row.mediaUrl || row.MediaUrl || "";
+        const pointsValue = Number(row.points ?? row.Points);
+        const points = Number.isFinite(pointsValue) && pointsValue > 0 ? pointsValue : 1;
+
+        try {
+          await storage.createQuestion({
+            title,
+            skill,
+            type,
+            content,
+            options,
+            correctAnswers,
+            tags,
+            points,
+            explanation,
+            mediaUrl,
+          });
+          imported += 1;
+        } catch (err: any) {
+          errors.push({ row: i + 2, error: err?.message ?? "Failed to insert question" });
+        }
+      }
+
+      let sourceUrl: string | null = null;
+      if (isR2Enabled) {
+        const excelKey = buildR2Key(req.file.originalname, req.file.mimetype ?? "application/vnd.ms-excel");
+        await uploadBufferToR2({
+          key: excelKey,
+          body: req.file.buffer,
+          contentType: req.file.mimetype ?? "application/vnd.ms-excel",
+        });
+        sourceUrl = getR2PublicUrl(excelKey);
+      }
+
+      res.json({ imported, failed: errors.length, errors, sourceUrl });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Tips endpoints
   app.get("/api/tips", async (req, res) => {
     try {
@@ -1199,29 +1293,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   // ===================== Admin: Media Upload & Attach =====================
-  const uploadDir = path.resolve(import.meta.dirname, '..', 'uploads');
-  const storageM = multer.diskStorage({
-    destination: (_req: any, _file: any, cb: any) => cb(null, uploadDir),
-    filename: (_req: any, file: any, cb: any) => {
-      const ts = Date.now();
-      const safe = file.originalname.replace(/[^a-zA-Z0-9_.-]/g, '_');
-      cb(null, `${ts}_${safe}`);
-    },
-  });
-  const upload = multer({ storage: storageM });
-
   app.post('/api/admin/media/upload', requireAdmin, upload.single('file'), async (req: any, res) => {
     try {
       if (!req.file) return res.status(400).json({ error: 'Missing file' });
       const { originalname, mimetype, filename, size } = req.file;
-      const type = mimetype.startsWith('audio') ? 'audio' : mimetype.startsWith('image') ? 'image' : 'file';
-      const url = `/uploads/${filename}`;
+      const safe = originalname.replace(/[^a-zA-Z0-9_.-]/g, '_');
+      const generatedName = `${Date.now()}_${safe}`;
+      const type = mimetype.startsWith('audio')
+        ? 'audio'
+        : mimetype.startsWith('image')
+          ? 'image'
+          : mimetype.startsWith('video')
+            ? 'video'
+            : mimetype === 'application/pdf'
+              ? 'pdf'
+              : 'file';
+
+      let url: string;
+      let r2Key: string | undefined;
+      if (isR2Enabled) {
+        if (!req.file.buffer) throw new Error("Upload buffer missing");
+        r2Key = buildR2Key(originalname, mimetype);
+        await uploadBufferToR2({
+          key: r2Key,
+          body: req.file.buffer,
+          contentType: mimetype,
+        });
+        url = getR2PublicUrl(r2Key);
+      } else {
+        url = `/uploads/${filename}`;
+      }
 
       if (process.env.DATABASE_URL) {
-        const ins = await query(`INSERT INTO dbo.aptis_media(name, [type], url, [size]) OUTPUT INSERTED.id VALUES(@p0, @p1, @p2, @p3)`, [originalname, type, url, size]);
+        const ins = await query(
+          `INSERT INTO dbo.aptis_media(name, [type], url, [size]) OUTPUT INSERTED.id VALUES(@p0, @p1, @p2, @p3)`,
+          [originalname, type, url, size],
+        );
         return res.status(201).json({ id: String(ins.recordset[0].id), filename: originalname, type, url, size });
       } else {
-        return res.status(201).json({ id: filename, filename: originalname, type, url, size });
+        const fallbackId = isR2Enabled && r2Key ? r2Key : filename;
+        return res.status(201).json({ id: fallbackId, filename: originalname, type, url, size });
       }
     } catch (error: any) {
       res.status(500).json({ error: error.message });

@@ -38,6 +38,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { QuestionImportButton } from "@/components/QuestionImportModal";
+import { QuestionExcelImportButton } from "@/components/QuestionExcelImportButton";
 import { QuestionFormModal } from "@/components/QuestionFormModal";
 import { useToast } from "@/hooks/use-toast";
 import { useQuestions } from "@/features/questions/hooks/useQuestions";
@@ -162,6 +163,11 @@ export default function QuestionsPage({ onShowTemplates }: QuestionsPageProps) {
             </a>
           </Button>
           <QuestionImportButton
+            onImported={() =>
+              queryClient.invalidateQueries({ queryKey: queryKeys.questions() })
+            }
+          />
+          <QuestionExcelImportButton
             onImported={() =>
               queryClient.invalidateQueries({ queryKey: queryKeys.questions() })
             }
