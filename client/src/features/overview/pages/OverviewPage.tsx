@@ -6,9 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, ClipboardList, Sparkles, RotateCw, Clock, BarChart3, Pencil, Trash2 } from "lucide-react";
 import type { Question, Activity } from "@shared/schema";
 import { QuestionImportButton } from "@/components/QuestionImportModal";
-import { useTestSets } from "@/hooks/admin/useTestSets";
-import { useQuestions } from "@/hooks/admin/useQuestions";
-import { useTemplates } from "@/hooks/admin/useTemplates";
+import { useTestSets } from "@/features/test-sets/hooks/useTestSets";
+import { useQuestions } from "@/features/questions/hooks/useQuestions";
+import { useTemplates } from "@/features/templates/hooks/useTemplates";
 
 type OverviewPageProps = {
   onShowTemplates: () => void;

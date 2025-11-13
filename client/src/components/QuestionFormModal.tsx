@@ -13,7 +13,7 @@ import { insertQuestionSchema, type Question, type QuestionTemplate } from "@sha
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { z } from "zod";
 import { Sparkles } from "lucide-react";
-import { useTemplates } from "@/hooks/admin/useTemplates";
+import { useTemplates } from "@/features/templates/hooks/useTemplates";
 
 const formSchema = insertQuestionSchema.extend({
   title: insertQuestionSchema.shape.title.min(1, "Title is required"),

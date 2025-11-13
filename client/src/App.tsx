@@ -31,6 +31,11 @@ function Router() {
     <Suspense fallback={<LoadingFallback />}>
       <Switch>
         <Route path="/" component={Login} />
+        <Route path="/admin/:rest*">
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminDashboard />
+          </ProtectedRoute>
+        </Route>
         <Route path="/admin">
           <ProtectedRoute allowedRoles={["admin"]}>
             <AdminDashboard />

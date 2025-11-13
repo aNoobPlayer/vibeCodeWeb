@@ -33,12 +33,20 @@ This backlog tracks every improvement idea that emerged from the system review. 
 ## 2. Modular Admin UI
 2.1 **Routing & layout groundwork**
 - [x] Create `client/src/layouts/AdminShell.tsx` housing sidebar/topbar
-- [x] Move current dashboard content into route components (`/admin/dashboard`, `/admin/questions`, etc.)
+- [ ] Move current dashboard content into route components
+  - [x] `/admin/dashboard` (OverviewPage)
+  - [x] `/admin/sets` (TestSetsPage)
+  - [x] `/admin/questions` (QuestionsPage)
+  - [x] `/admin/templates`
+  - [x] `/admin/grading`
+  - [x] `/admin/tips`
+  - [x] `/admin/media`
+  - [x] `/admin/users`
 - [ ] Update router to lazy-load each admin page
 
 2.2 **Feature slices**
-- [ ] Set up `client/src/features/<domain>` directories (questions, templates, sets, tips, media, users)
-- [ ] Relocate domain-specific components and hooks into their slices
+- [x] Set up `client/src/features/<domain>` directories (overview, questions, templates, sets, grading, tips, media, users)
+- [x] Relocate domain-specific pages and hooks into their slices
 - [ ] Export public APIs (hooks + components) from each slice
 
 2.3 **Design system primitives**
