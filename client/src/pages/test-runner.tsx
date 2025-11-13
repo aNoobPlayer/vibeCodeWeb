@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useRoute } from "wouter";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRoute, useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,12 +8,17 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import {
+  AlertTriangle,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Info,
+  PauseCircle,
+  PlayCircle,
   SendHorizontal,
   Sparkles,
+  X,
 } from "lucide-react";
 
 type MappedQuestion = {
@@ -38,8 +43,33 @@ type AnswerResult = {
   score: number | null;
 };
 
+type NoticeTone = "success" | "warning" | "info" | "error";
+type NoticePayload = { tone: NoticeTone; title: string; message: string };
+
+const noticeToneClasses: Record<NoticeTone, string> = {
+  success: "border-emerald-200 bg-emerald-50",
+  warning: "border-amber-200 bg-amber-50",
+  error: "border-rose-200 bg-rose-50",
+  info: "border-slate-200 bg-white",
+};
+
+const noticeTitleClasses: Record<NoticeTone, string> = {
+  success: "text-emerald-900",
+  warning: "text-amber-900",
+  error: "text-rose-900",
+  info: "text-slate-900",
+};
+
+const noticeIconMap = {
+  success: CheckCircle2,
+  warning: AlertTriangle,
+  error: AlertTriangle,
+  info: Info,
+} as const;
+
 export default function TestRunner() {
   const [, params] = useRoute("/student/test/:setId/:submissionId?");
+  const [, setLocation] = useLocation();
   const setId = params?.setId!;
   const [submissionId, setSubmissionId] = useState<string | null>(params?.submissionId || null);
   const [loading, setLoading] = useState(true);
@@ -52,6 +82,78 @@ export default function TestRunner() {
     (AnswerResult & { questionId: string; savedAt: number }) | null
   >(null);
   const current = questions[index];
+  const normalizedType = (current?.question.type || "").toLowerCase();
+  const [notice, setNotice] = useState<(NoticePayload & { id: number }) | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showCompletionOverlay, setShowCompletionOverlay] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [showExitPrompt, setShowExitPrompt] = useState(false);
+  const handleReturnToDashboard = useCallback(() => {
+    setLocation("/student");
+  }, [setLocation]);
+  const handleStartNewPractice = useCallback(() => {
+    setLocation("/student?view=practice");
+  }, [setLocation]);
+  const handleKeepReviewing = useCallback(() => {
+    setShowCompletionOverlay(false);
+  }, []);
+  const handleTogglePause = useCallback(() => {
+    setPaused((prev) => !prev);
+  }, []);
+  const handleExitWithoutSubmit = useCallback(() => {
+    setShowExitPrompt(false);
+    setPaused(false);
+    setLocation("/student");
+  }, [setLocation]);
+  const handleOpenExitPrompt = useCallback(() => {
+    setPaused(false);
+    setShowExitPrompt(true);
+  }, []);
+
+  const showNotice = useCallback((payload: NoticePayload) => {
+    if (noticeTimer.current) {
+      clearTimeout(noticeTimer.current);
+    }
+    const next = { ...payload, id: Date.now() };
+    setNotice(next);
+    noticeTimer.current = setTimeout(() => {
+      setNotice((currentNotice) => (currentNotice?.id === next.id ? null : currentNotice));
+    }, 5000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (noticeTimer.current) {
+        clearTimeout(noticeTimer.current);
+      }
+    };
+  }, []);
+
+  const questionFocusTips = current
+    ? [
+        current.question.skill
+          ? `Highlight your ${current.question.skill.toLowerCase()} skills with a concrete example.`
+          : "Lead with your strongest idea first, then support it.",
+        "Keep sentences in American English so scorers stay aligned.",
+        "Save after each question to keep your streak safe.",
+      ]
+    : [];
+  const answerChecklist = (() => {
+    switch (normalizedType) {
+      case "mcq_single":
+        return ["Read every option completely once.", "Eliminate obvious mismatches.", "Lock in the best match, then save."];
+      case "mcq_multi":
+        return [
+          "Expect more than one correct answer.",
+          "Select every statement supported by the prompt.",
+          "Review selections before saving.",
+        ];
+      case "fill_blank":
+        return ["Match the sentence tense and tone.", "Use US spelling (color, organize).", "Reread to confirm the flow."];
+      default:
+        return ["Plan your response in one sentence.", "Back it up with a fact or example.", "Proofread quickly, then save."];
+    }
+  })();
 
   useEffect(() => {
     let cancelled = false;
@@ -106,7 +208,11 @@ export default function TestRunner() {
       return data;
     } catch (e) {
       console.error(e);
-      alert("Failed to save answer");
+      showNotice({
+        tone: "error",
+        title: "Save failed",
+        message: e instanceof Error ? e.message : "Failed to save answer. Please try again.",
+      });
     } finally {
       setSaving(false);
     }
@@ -125,11 +231,25 @@ export default function TestRunner() {
         questionId,
         savedAt: Date.now(),
       });
+      const tone: NoticeTone = result.isCorrect === true ? "success" : result.isCorrect === false ? "warning" : "info";
+      const message =
+        result.isCorrect === null
+          ? "Saved! Final scoring will appear after review."
+          : result.isCorrect
+          ? "Looking great—auto-scoring flagged this as correct."
+          : "Saved successfully. Give it another look before submitting.";
+      showNotice({
+        tone,
+        title: "Answer saved",
+        message,
+      });
     }
   }
 
   async function submitAll() {
     if (!submissionId) return;
+    setShowExitPrompt(false);
+    setPaused(false);
     setSaving(true);
     try {
       const res = await fetch(`/api/submissions/${submissionId}/submit`, {
@@ -139,10 +259,22 @@ export default function TestRunner() {
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setSubmitted(true);
-      alert(`Submitted! Score: ${data.score}`);
+      setShowCompletionOverlay(true);
+      showNotice({
+        tone: "success",
+        title: "Submission sent",
+        message:
+          typeof data?.score === "number"
+            ? `Preliminary score recorded: ${data.score}`
+            : "We'll email you when grading wraps up.",
+      });
     } catch (e) {
       console.error(e);
-      alert("Failed to submit");
+      showNotice({
+        tone: "error",
+        title: "Submission failed",
+        message: e instanceof Error ? e.message : "Please try again in a moment.",
+      });
     } finally {
       setSaving(false);
     }
@@ -166,6 +298,137 @@ export default function TestRunner() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#9CCC65] via-[#66BB6A] to-[#1B5E20] py-10 px-4">
+      {notice && (
+        <div className="fixed inset-x-0 top-4 z-60 flex justify-center px-4">
+          <div
+            className={cn(
+              "w-full max-w-xl rounded-3xl border px-5 py-4 shadow-2xl backdrop-blur flex items-start gap-3 transition duration-300",
+              noticeToneClasses[notice.tone]
+            )}
+            role="status"
+            aria-live="polite"
+          >
+            {(() => {
+              const Icon = noticeIconMap[notice.tone];
+              return (
+                <Icon
+                  className={cn("h-5 w-5 flex-shrink-0", noticeTitleClasses[notice.tone])}
+                  aria-hidden="true"
+                />
+              );
+            })()}
+            <div className="flex-1">
+              <p className={cn("text-sm font-semibold leading-tight", noticeTitleClasses[notice.tone])}>{notice.title}</p>
+              <p className="text-xs text-slate-600 mt-1">{notice.message}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setNotice(null)}
+              aria-label="Dismiss notification"
+              className="rounded-full p-1 text-slate-400 hover:text-slate-600 transition"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+      {paused && !submitted && (
+        <div className="fixed inset-0 z-30 bg-slate-950/70 backdrop-blur-sm px-4 py-10 flex items-center justify-center">
+          <div className="w-full max-w-xl rounded-[32px] bg-white p-8 shadow-2xl space-y-5 text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Practice paused</p>
+            <h2 className="text-3xl font-semibold text-slate-900">Take a breath. Your spot is saved.</h2>
+            <p className="text-sm text-slate-500">
+              While paused you can’t change answers. Resume to keep working or head back to the dashboard.
+            </p>
+            <div className="space-y-3">
+              <Button className="w-full" onClick={handleTogglePause}>
+                <PlayCircle className="w-4 h-4 mr-2" />
+                Resume practice
+              </Button>
+              <Button
+                variant="secondary"
+                className="w-full"
+                onClick={() => {
+                  setPaused(false);
+                  setShowExitPrompt(true);
+                }}
+              >
+                Exit or submit
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showExitPrompt && !submitted && (
+        <div className="fixed inset-0 z-40 bg-slate-950/80 backdrop-blur-sm px-4 py-10 flex items-center justify-center">
+          <div className="w-full max-w-xl rounded-[32px] bg-white p-8 shadow-2xl space-y-5">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">Leave practice</p>
+              <h2 className="text-2xl font-semibold text-slate-900 mt-2">Ready to wrap up?</h2>
+              <p className="text-sm text-slate-500">
+                You can submit everything as-is or step away and finish later.
+              </p>
+            </div>
+            <div className="space-y-3">
+              <Button
+                className="w-full"
+                onClick={() => {
+                  setShowExitPrompt(false);
+                  submitAll();
+                }}
+                disabled={saving}
+              >
+                Submit & exit
+              </Button>
+              <Button variant="secondary" className="w-full" onClick={handleExitWithoutSubmit}>
+                Exit without submitting
+              </Button>
+              <Button variant="ghost" className="w-full" onClick={() => setShowExitPrompt(false)}>
+                Stay in this test
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {submitted && showCompletionOverlay && (
+        <div className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm px-4 py-10 flex items-center justify-center">
+          <div className="w-full max-w-2xl rounded-[32px] bg-white p-8 shadow-2xl space-y-6">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Test submitted</p>
+              <h2 className="text-3xl font-semibold text-slate-900">Great work—you’re all done!</h2>
+              <p className="text-sm text-slate-500">
+                You answered {answeredCount} of {total || 1} questions and we’ve synced everything to your student dashboard.
+                Choose what to do next.
+              </p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3 text-center">
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
+                <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Progress</p>
+                <p className="text-3xl font-semibold text-slate-900 mt-2">{progress}%</p>
+              </div>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
+                <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Answered</p>
+                <p className="text-3xl font-semibold text-slate-900 mt-2">{answeredCount}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
+                <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Remaining</p>
+                <p className="text-3xl font-semibold text-slate-900 mt-2">{Math.max((total || 0) - answeredCount, 0)}</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <Button className="w-full" onClick={handleReturnToDashboard}>
+                Back to student dashboard
+              </Button>
+              <Button variant="secondary" className="w-full" onClick={handleStartNewPractice}>
+                Plan my next practice
+              </Button>
+              <Button variant="ghost" className="w-full" onClick={handleKeepReviewing}>
+                Keep reviewing answers
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="max-w-6xl mx-auto space-y-6">
         <header className="bg-white/10 backdrop-blur-3xl border border-white/25 rounded-3xl p-6 shadow-2xl flex flex-wrap gap-6 items-center justify-between">
           <div className="flex-1 min-w-[260px]">
@@ -188,8 +451,38 @@ export default function TestRunner() {
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <Clock3 className="w-4 h-4 text-primary" />
-              <span>{current.question.skill} • {formatQuestionType(current.question.type)}</span>
+              <span>{current.question.skill} / {formatQuestionType(current.question.type)}</span>
             </div>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Button
+              type="button"
+              variant={paused ? "secondary" : "ghost"}
+              onClick={handleTogglePause}
+              disabled={submitted}
+              className="text-white border-white/50 hover:bg-white/10"
+            >
+              {paused ? (
+                <>
+                  <PlayCircle className="w-4 h-4" />
+                  Resume practice
+                </>
+              ) : (
+                <>
+                  <PauseCircle className="w-4 h-4" />
+                  Pause practice
+                </>
+              )}
+            </Button>
+            <button
+              type="button"
+              onClick={handleOpenExitPrompt}
+              className="rounded-full border border-white/40 text-white/80 hover:text-white hover:bg-white/10 p-2 transition disabled:opacity-40"
+              aria-label="Exit test"
+              disabled={submitted && showCompletionOverlay}
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </header>
 
@@ -214,6 +507,25 @@ export default function TestRunner() {
               {current.question.content}
             </p>
 
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-gray-500">Focus guidance</p>
+                <ul className="mt-3 space-y-2 text-sm text-gray-600 list-disc pl-5">
+                  {questionFocusTips.map((tip, tipIndex) => (
+                    <li key={`focus-tip-${current.question.id}-${tipIndex}`}>{tip}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-gray-500">Answer checklist</p>
+                <ul className="mt-3 space-y-2 text-sm text-gray-600 list-disc pl-5">
+                  {answerChecklist.map((tip, tipIndex) => (
+                    <li key={`checklist-${current.question.id}-${tipIndex}`}>{tip}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
             {current.question.mediaUrl && (
               <div className="pt-2">
                 <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
@@ -236,8 +548,21 @@ export default function TestRunner() {
               options={current.question.options}
               onSave={(value) => handleAnswerSubmit(value, current.question.id)}
               saving={saving}
-              disabled={submitted}
+              disabled={submitted || paused}
             />
+
+            <div className="grid gap-4 md:grid-cols-2 text-sm text-gray-600">
+              <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-4">
+                <p className="font-semibold text-gray-900">Save reminder</p>
+                <p className="mt-1 text-xs text-gray-500">Tap “Save answer” after each response so the system keeps your place.</p>
+                <p className="mt-2">Saved status updates instantly near the footer controls.</p>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4">
+                <p className="font-semibold text-gray-900">Need a hint?</p>
+                <p className="mt-1">Look back at key phrases in the prompt. US scorers reward answers that reuse that same language.</p>
+                <p className="mt-2 text-xs text-gray-500">Support: support@aptiskeys.com</p>
+              </div>
+            </div>
 
             {lastAnswerResult && lastAnswerResult.questionId === current.question.id && (
               <div
@@ -266,7 +591,7 @@ export default function TestRunner() {
                   type="button"
                   variant="ghost"
                   onClick={() => setIndex(Math.max(0, index - 1))}
-                  disabled={index === 0}
+                  disabled={index === 0 || paused}
                   className="bg-white text-gray-700 border border-gray-200 rounded-full px-5 shadow-sm hover:shadow-md disabled:opacity-40"
                 >
                   <ChevronLeft className="w-4 h-4 mr-1" />
@@ -276,7 +601,7 @@ export default function TestRunner() {
                   type="button"
                   variant="secondary"
                   onClick={() => setIndex(Math.min(total - 1, index + 1))}
-                  disabled={index >= total - 1}
+                  disabled={index >= total - 1 || paused}
                   className="rounded-full px-5 shadow-sm hover:shadow-md disabled:opacity-40"
                 >
                   Next
@@ -285,7 +610,7 @@ export default function TestRunner() {
                 <Button
                   type="button"
                   onClick={submitAll}
-                  disabled={saving || submitted}
+                  disabled={saving || submitted || paused}
                   className="rounded-full px-6 bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg hover:shadow-xl disabled:opacity-60"
                 >
                   <SendHorizontal className="w-4 h-4 mr-2" />
@@ -314,8 +639,9 @@ export default function TestRunner() {
                     key={question.question.id}
                     type="button"
                     onClick={() => setIndex(idx)}
+                    disabled={paused}
                     className={cn(
-                      "h-12 rounded-2xl border text-sm font-semibold transition-all",
+                      "h-12 rounded-2xl border text-sm font-semibold transition-all disabled:opacity-50",
                       isActive
                         ? "bg-gradient-to-br from-primary to-primary/80 text-white shadow-lg border-transparent"
                         : isAnswered
