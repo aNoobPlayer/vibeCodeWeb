@@ -1148,6 +1148,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get a single saved answer for a submission (for student to resume a question)
+  app.get("/api/submissions/:id/answers/:questionId", requireAuth, async (req, res) => {
+    try {
+      const submissionId = parseInt(req.params.id, 10);
+      const questionId = parseInt(req.params.questionId, 10);
+      if (Number.isNaN(submissionId) || Number.isNaN(questionId)) {
+        return res.status(400).json({ error: 'Invalid id' });
+      }
+      const userId = parseInt(String(req.session.userId), 10);
+
+      // Verify submission ownership
+      const sub = await query(`SELECT TOP 1 userId, [status] FROM dbo.aptis_submissions WHERE id = @p0`, [submissionId]);
+      const s = sub.recordset?.[0];
+      if (!s || s.userId !== userId) return res.status(403).json({ error: 'Forbidden' });
+
+      const r = await query(`SELECT answerData, isCorrect, score FROM dbo.aptis_answers WHERE submissionId = @p0 AND questionId = @p1`, [submissionId, questionId]);
+      const row = r.recordset?.[0];
+      if (!row) return res.status(404).json({ error: 'Answer not found' });
+
+      let parsed: any = null;
+      try {
+        parsed = row.answerData ? JSON.parse(row.answerData) : null;
+      } catch {
+        parsed = row.answerData;
+      }
+
+      const isCorrectVal = row.isCorrect === null ? null : (row.isCorrect === 1 || row.isCorrect === true);
+
+      res.json({ answerData: parsed, isCorrect: isCorrectVal, score: row.score });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.get("/api/results/me", requireAuth, async (req, res) => {
     try {
       const userId = parseInt(String(req.session.userId), 10);
