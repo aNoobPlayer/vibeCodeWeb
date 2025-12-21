@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,7 +39,7 @@ import {
   Clock3,
   Sparkles,
 } from "lucide-react";
-import type { Activity, Lesson, TestSet, Tip } from "@shared/schema";
+import type { Activity, Course, Lesson, TestSet, Tip } from "@shared/schema";
 import { useLocation } from "wouter";
 import { getYouTubeEmbedUrl } from "@/lib/youtube";
 
@@ -69,11 +70,11 @@ export default function StudentDashboard() {
             <div className="font-semibold text-lg">
               {currentPage === "practice"
                 ? "Luyện tập"
-                : currentPage === "lessons"
-                    ? "Lessons"
-                    : currentPage === "tips"
-                      ? "Mẹo học"
-                      : "Thống kê"}
+                : currentPage === "courses"
+                  ? "Courses"
+                  : currentPage === "tips"
+                    ? "Mẹo học"
+                    : "Thống kê"}
             </div>
           </div>
 
@@ -95,17 +96,17 @@ export default function StudentDashboard() {
               <span className="font-medium">Luyện tập</span>
               <span className="text-lg">→</span>
             </Button>
-                        <Button
+            <Button
               variant="ghost"
-              data-testid="nav-student-lessons"
-              onClick={() => setCurrentPage("lessons")}
+              data-testid="nav-student-courses"
+              onClick={() => setCurrentPage("courses")}
               className={`w-full flex items-center justify-between px-5 py-3.5 rounded-xl transition-all duration-300 backdrop-blur-md ${
-                currentPage === "lessons"
+                currentPage === "courses"
                   ? "bg-white/15 shadow-lg"
                   : "hover:bg-white/10 hover:translate-x-2"
               }`}
             >
-              <span className="font-medium">Lessons</span>
+              <span className="font-medium">Courses</span>
               <span className="text-lg">→</span>
             </Button>
             <Button
@@ -218,7 +219,7 @@ export default function StudentDashboard() {
           {/* Content */}
           <div className="p-8">
             {currentPage === "practice" && <PracticePage searchQuery={searchQuery} />}
-                        {currentPage === "lessons" && <LessonsPage searchQuery={searchQuery} />}
+            {currentPage === "courses" && <CoursesPage searchQuery={searchQuery} />}
             {currentPage === "tips" && <TipsPage searchQuery={searchQuery} />}
             {currentPage === "progress" && <ProgressPage />}
           </div>
@@ -511,15 +512,86 @@ function PracticeCard({ testSet }: { testSet: TestSet }) {
   );
 }
 
-// Lessons Page Component
-function LessonsPage({ searchQuery }: { searchQuery: string }) {
+
+// Courses Page Component
+function CoursesPage({ searchQuery }: { searchQuery: string }) {
   const [filterSkill, setFilterSkill] = useState("");
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+  const [activeGroup, setActiveGroup] = useState<"studying" | "pending" | "open">("studying");
+  const didSetInitialGroup = useRef(false);
+  const { toast } = useToast();
   const [, setLocation] = useLocation();
 
-  const { data: lessons } = useQuery<Lesson[]>({
-    queryKey: ["/api/lessons"],
+  const { data: courses } = useQuery<(Course & { enrollmentStatus?: string })[]>({
+    queryKey: ["/api/courses"],
   });
+
+  const filteredCourses = (courses ?? []).filter((course) => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      course.name.toLowerCase().includes(q) ||
+      course.code.toLowerCase().includes(q) ||
+      (course.description ?? "").toLowerCase().includes(q)
+    );
+  });
+
+  const courseGroups = useMemo(() => {
+    const studying = filteredCourses.filter((course) => course.enrollmentStatus === "approved");
+    const pending = filteredCourses.filter((course) => course.enrollmentStatus === "pending");
+    const open = filteredCourses.filter(
+      (course) => course.enrollmentStatus !== "approved" && course.enrollmentStatus !== "pending",
+    );
+    return { studying, pending, open };
+  }, [filteredCourses]);
+
+  const visibleCourses = courseGroups[activeGroup];
+
+  useEffect(() => {
+    if (didSetInitialGroup.current) return;
+    const nextGroup =
+      (courseGroups.studying.length > 0 && "studying") ||
+      (courseGroups.pending.length > 0 && "pending") ||
+      (courseGroups.open.length > 0 && "open") ||
+      null;
+    if (nextGroup && nextGroup !== activeGroup) {
+      setActiveGroup(nextGroup);
+    }
+    if (nextGroup || filteredCourses.length === 0) {
+      didSetInitialGroup.current = true;
+    }
+  }, [activeGroup, courseGroups, filteredCourses.length]);
+
+  useEffect(() => {
+    if (visibleCourses.length === 0) {
+      if (selectedCourseId) setSelectedCourseId(null);
+      return;
+    }
+    if (!selectedCourseId || !visibleCourses.some((course) => course.id === selectedCourseId)) {
+      setSelectedCourseId(visibleCourses[0].id);
+    }
+  }, [selectedCourseId, visibleCourses]);
+
+  const activeCourse = filteredCourses.find((course) => course.id === selectedCourseId) ?? null;
+  const enrollmentStatus = activeCourse?.enrollmentStatus ?? "none";
+  const isEnrolled = enrollmentStatus === "approved";
+  const isOpen = (activeCourse?.status ?? "open") === "open";
+  const canApply = isOpen && (enrollmentStatus === "none" || enrollmentStatus === "rejected");
+
+  const { data: lessons } = useQuery<Lesson[]>({
+    queryKey: ["/api/lessons", { courseId: selectedCourseId ?? "none" }],
+    queryFn: async () => {
+      if (!selectedCourseId) return [];
+      const res = await fetch(`/api/lessons?courseId=${selectedCourseId}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    enabled: Boolean(selectedCourseId) && isEnrolled,
+  });
+
   const { data: testSets } = useQuery<TestSet[]>({
     queryKey: ["/api/test-sets"],
   });
@@ -535,9 +607,9 @@ function LessonsPage({ searchQuery }: { searchQuery: string }) {
   const filteredLessons = lessons?.filter((lesson) => {
     if (lesson.status !== "published") return false;
     if (filterSkill && lesson.skill !== filterSkill) return false;
-    if (searchQuery && !lesson.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
+
   const sortedLessons = useMemo(() => {
     return [...(filteredLessons ?? [])].sort((a, b) => {
       const orderA = a.orderIndex ?? Number.MAX_SAFE_INTEGER;
@@ -602,6 +674,32 @@ function LessonsPage({ searchQuery }: { searchQuery: string }) {
     General: "General",
   };
 
+  const applyMutation = useMutation({
+    mutationFn: async (courseId: string) => {
+      const res = await fetch(`/api/courses/${courseId}/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/courses"] });
+      toast({
+        title: "Application submitted",
+        description: "Your request is pending approval from the instructor.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Unable to apply",
+        description: error?.message ?? "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const startLessonTest = async (testSetId: string | null | undefined) => {
     if (!testSetId) return;
     try {
@@ -624,304 +722,407 @@ function LessonsPage({ searchQuery }: { searchQuery: string }) {
     }
   };
 
-  return (
-    <div className="space-y-8 animate-fadeIn">
-      <div className="relative overflow-hidden rounded-3xl border border-white/60 bg-white/70 p-6 shadow-xl backdrop-blur-xl">
-        <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
-        <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-accent/10 blur-3xl" />
-        <div className="relative space-y-5">
-          <div className="flex flex-wrap items-start justify-between gap-5">
-            <div>
-              <p className="text-xs uppercase tracking-[0.35em] text-gray-400">Online course</p>
-              <h1 className="text-4xl font-bold text-gray-900 mt-2">APTIS Learning Path</h1>
-              <p className="mt-2 text-gray-600 text-sm md:text-base">
-                Follow a step-by-step curriculum with video lessons, guided notes, and practice tasks.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2 text-xs">
-              <span className="rounded-full bg-white/90 px-3 py-1 text-gray-600 shadow-sm">
-                {sortedLessons.length} lessons
-              </span>
-              <span className="rounded-full bg-white/90 px-3 py-1 text-gray-600 shadow-sm">
-                {totalDurationLabel}
-              </span>
-              <span className="rounded-full bg-white/90 px-3 py-1 text-gray-600 shadow-sm">
-                {filterSkill ? skillLabels[filterSkill] ?? filterSkill : "All skills"}
-              </span>
-            </div>
-          </div>
-          <div>
-            <div className="flex items-center justify-between text-xs text-gray-500">
-              <span>Course progress</span>
-              <span>{progressLabel}</span>
-            </div>
-            <div className="mt-2 h-2 rounded-full bg-gray-200/80 overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-primary via-accent to-warning"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex gap-3 justify-center flex-wrap">
-        <button
-          data-testid="filter-lesson-all"
-          onClick={() => setFilterSkill("")}
-          className={`px-5 py-2 rounded-full font-medium transition-all ${
-            filterSkill === ""
-              ? "bg-gradient-to-r from-primary to-accent text-white shadow-md"
-              : "bg-white/60 text-gray-700 hover:bg-white/80"
-          }`}
-        >
-          All skills
-        </button>
-        {["Reading", "Listening", "Speaking", "Writing", "GrammarVocabulary", "General"].map((skill) => (
-          <button
-            key={skill}
-            data-testid={`filter-lesson-${skill.toLowerCase()}`}
-            onClick={() => setFilterSkill(skill)}
-            className={`px-5 py-2 rounded-full font-medium transition-all ${
-              filterSkill === skill
-                ? "bg-gradient-to-r from-primary to-accent text-white shadow-md"
-                : "bg-white/60 text-gray-700 hover:bg-white/80"
+  const renderCourseCard = (course: Course & { enrollmentStatus?: string }) => {
+    const status = course.enrollmentStatus ?? "none";
+    const isActive = course.id === selectedCourseId;
+    const statusLabel =
+      status === "approved"
+        ? "Enrolled"
+        : status === "pending"
+          ? "Pending"
+          : status === "rejected"
+            ? "Rejected"
+            : "Open";
+    return (
+      <button
+        key={course.id}
+        type="button"
+        onClick={() => setSelectedCourseId(course.id)}
+        className={`rounded-2xl border px-5 py-4 text-left transition-all ${
+          isActive
+            ? "border-primary/40 bg-primary/10 shadow-md"
+            : "border-white/70 bg-white/80 hover:bg-white"
+        }`}
+      >
+        <p className="text-xs uppercase tracking-[0.3em] text-gray-400">{course.code}</p>
+        <div className="mt-2 flex items-start justify-between gap-2">
+          <p className="text-lg font-semibold text-gray-900">{course.name}</p>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+              status === "approved"
+                ? "bg-emerald-100 text-emerald-700"
+                : status === "pending"
+                  ? "bg-amber-100 text-amber-700"
+                  : status === "rejected"
+                    ? "bg-rose-100 text-rose-700"
+                    : "bg-blue-100 text-blue-700"
             }`}
           >
-            {skillLabels[skill] ?? skill}
-          </button>
-        ))}
+            {statusLabel}
+          </span>
+        </div>
+        <p className="mt-2 text-sm text-gray-600 line-clamp-2">
+          {course.description || "No course description yet."}
+        </p>
+      </button>
+    );
+  };
+
+  return (
+    <div className="space-y-8 animate-fadeIn">
+      <div className="text-center">
+        <h1 className="text-5xl font-bold bg-gradient-to-r from-primary via-accent to-warning bg-clip-text text-transparent mb-3 tracking-tight">
+          Courses
+        </h1>
+        <p className="text-gray-600 text-lg">Pick a course to start learning.</p>
       </div>
 
-      {sortedLessons.length === 0 ? (
+      {filteredCourses.length === 0 ? (
         <div className="text-center py-20">
-          <BookOpen className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-          <p className="text-gray-500 text-lg">No lessons available yet.</p>
+          <Library className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+          <p className="text-gray-500 text-lg">No courses available yet.</p>
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]" data-testid="lessons-grid">
-          <div className="space-y-4">
-            <div className="rounded-3xl border border-white/60 bg-white/80 p-5 shadow-lg backdrop-blur-xl">
-              <div className="flex items-center justify-between gap-3">
+        <div className="space-y-5">
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {([
+              { key: "studying", label: "Studying", count: courseGroups.studying.length },
+              { key: "pending", label: "Pending", count: courseGroups.pending.length },
+              { key: "open", label: "Not registered", count: courseGroups.open.length },
+            ] as const).map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveGroup(tab.key)}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                  activeGroup === tab.key
+                    ? "bg-gradient-to-r from-primary to-accent text-white shadow-md"
+                    : "bg-white/70 text-gray-700 hover:bg-white"
+                }`}
+              >
+                {tab.label} ({tab.count})
+              </button>
+            ))}
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {visibleCourses.length === 0 ? (
+              <Card className="p-5 text-sm text-gray-500">
+                {activeGroup === "studying"
+                  ? "You are not enrolled in any course yet."
+                  : activeGroup === "pending"
+                    ? "No pending applications."
+                    : "No courses to register right now."}
+              </Card>
+            ) : (
+              visibleCourses.map(renderCourseCard)
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeCourse && (
+        <div className="space-y-6">
+          <div className="relative overflow-hidden rounded-3xl border border-white/60 bg-white/70 p-6 shadow-xl backdrop-blur-xl">
+            <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
+            <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-accent/10 blur-3xl" />
+            <div className="relative space-y-5">
+              <div className="flex flex-wrap items-start justify-between gap-5">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Course outline</p>
-                  <p className="text-lg font-semibold text-gray-900">Lessons</p>
+                  <p className="text-xs uppercase tracking-[0.35em] text-gray-400">Active course</p>
+                  <h2 className="text-3xl font-bold text-gray-900 mt-2">{activeCourse.name}</h2>
+                  <p className="mt-2 text-gray-600 text-sm md:text-base">
+                    {activeCourse.description || "No course description yet."}
+                  </p>
                 </div>
-                <span className="text-xs text-gray-500">{sortedLessons.length} steps</span>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span className="rounded-full bg-white/90 px-3 py-1 text-gray-600 shadow-sm">
+                    {sortedLessons.length} lessons
+                  </span>
+                  <span className="rounded-full bg-white/90 px-3 py-1 text-gray-600 shadow-sm">
+                    {totalDurationLabel}
+                  </span>
+                  <span className="rounded-full bg-white/90 px-3 py-1 text-gray-600 shadow-sm">
+                    {filterSkill ? skillLabels[filterSkill] ?? filterSkill : "All skills"}
+                  </span>
+                </div>
               </div>
-              <div className="mt-4 max-h-[520px] scroll-ghost overflow-y-auto space-y-2 pr-1">
-                {sortedLessons.map((lesson, index) => {
-                  const isActive = activeLesson?.id === lesson.id;
-                  return (
-                    <button
-                      key={lesson.id}
-                      data-testid={`lesson-card-${lesson.id}`}
-                      onClick={() => setSelectedLesson(lesson)}
-                      className={`w-full rounded-2xl border px-4 py-3 text-left transition-all ${
-                        isActive
-                          ? "border-primary/30 bg-primary/10 shadow-md"
-                          : "border-white/70 bg-white/70 hover:bg-white"
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div
-                          className={`flex h-10 w-10 items-center justify-center rounded-xl text-sm font-semibold ${
-                            isActive ? "bg-primary text-white" : "bg-gray-100 text-gray-600"
-                          }`}
-                        >
-                          {String(index + 1).padStart(2, "0")}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-3">
-                            <p className={`text-sm font-semibold ${isActive ? "text-primary" : "text-gray-900"}`}>
-                              {lesson.title}
-                            </p>
-                            {lesson.testSetId && (
-                              <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-600">
-                                Test
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-1 text-xs text-gray-500 line-clamp-2">
-                            {lesson.description || lesson.content}
-                          </p>
-                          <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-gray-500">
-                            <span className="rounded-full bg-white/80 px-2 py-0.5">
-                              {skillLabels[lesson.skill] ?? lesson.skill}
-                            </span>
-                            <span className="rounded-full bg-white/80 px-2 py-0.5">
-                              {lesson.durationMinutes ? `${lesson.durationMinutes} min` : "Self-paced"}
-                            </span>
-                          </div>
-                        </div>
-                        {isActive && (
-                          <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                            Now
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
+              <div>
+                <div className="flex items-center justify-between text-xs text-gray-500">
+                  <span>Course progress</span>
+                  <span>{progressLabel}</span>
+                </div>
+                <div className="mt-2">
+                  <Progress value={progressPercent} className="h-2" />
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="space-y-5">
-            {activeLesson && (
-              <div className="rounded-3xl border border-white/60 bg-white/90 p-6 shadow-xl backdrop-blur-xl">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.35em] text-gray-400">Now learning</p>
-                    <h2 className="text-2xl font-semibold text-gray-900">{activeLesson.title}</h2>
-                    <p className="mt-2 text-sm text-gray-600">
-                      {activeLesson.description || "No summary yet."}
-                    </p>
-                  </div>
-                  <Badge
-                    variant="secondary"
-                    className={
-                      activeLesson.skill === "Reading"
-                        ? "bg-blue-100 text-blue-700"
-                        : activeLesson.skill === "Listening"
-                          ? "bg-cyan-100 text-cyan-700"
-                          : activeLesson.skill === "Speaking"
-                            ? "bg-green-100 text-green-700"
-                            : activeLesson.skill === "Writing"
-                              ? "bg-orange-100 text-orange-700"
-                              : "bg-gray-100 text-gray-700"
-                    }
-                  >
-                    {activeLesson.skill}
-                  </Badge>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2 text-xs text-gray-500">
-                  <span className="rounded-full bg-gray-100 px-2 py-1">
-                    Lesson {progressLabel}
-                  </span>
-                  <span className="rounded-full bg-gray-100 px-2 py-1">
-                    {activeLesson.durationMinutes ? `${activeLesson.durationMinutes} min` : "Self-paced"}
-                  </span>
-                  {activeLesson.testSetId && (
-                    <span className="rounded-full bg-indigo-100 px-2 py-1 text-indigo-700">
-                      Test ready
-                    </span>
-                  )}
-                </div>
-
-                {activeLessonVideo ? (
-                  <div className="mt-5 overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
-                    <div className="relative w-full pt-[56.25%]">
-                      <iframe
-                        src={activeLessonVideo}
-                        title={`${activeLesson.title} video`}
-                        className="absolute inset-0 h-full w-full"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      />
-                    </div>
-                  </div>
-                ) : activeLesson.coverImageUrl ? (
-                  <div className="mt-5 overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
-                    <img
-                      src={activeLesson.coverImageUrl}
-                      alt={activeLesson.title}
-                      className="h-56 w-full object-cover"
-                    />
-                  </div>
-                ) : null}
-
-                <div className="mt-6 grid gap-4 md:grid-cols-3">
-                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      Objectives
-                    </p>
-                    {activeOutcomes.length > 0 ? (
-                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
-                        {activeOutcomes.map((item, index) => (
-                          <li key={`lesson-outcome-${index}`}>{item}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="mt-2 text-xs text-gray-400">No objectives yet.</p>
-                    )}
-                  </div>
-                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      Key takeaways
-                    </p>
-                    {activeKeyPoints.length > 0 ? (
-                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
-                        {activeKeyPoints.map((item, index) => (
-                          <li key={`lesson-key-${index}`}>{item}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="mt-2 text-xs text-gray-400">Add takeaways to guide review.</p>
-                    )}
-                  </div>
-                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      Practice tasks
-                    </p>
-                    {activePractice.length > 0 ? (
-                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
-                        {activePractice.map((item, index) => (
-                          <li key={`lesson-practice-${index}`}>{item}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="mt-2 text-xs text-gray-400">No practice tasks yet.</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-6">
-                  <p className="text-sm font-semibold text-gray-900">Lesson content</p>
-                  <p className="mt-3 whitespace-pre-wrap text-gray-800 leading-relaxed">
-                    {activeLesson.content}
-                  </p>
-                </div>
-
-                {activeTestSetLabel && (
-                  <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-gray-400">Attached test</p>
-                      <p className="text-sm font-semibold text-gray-900">{activeTestSetLabel}</p>
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={() => startLessonTest(activeLesson.testSetId)}
-                      data-testid={`button-start-lesson-test-${activeLesson.id}`}
-                    >
-                      Start test
-                    </Button>
-                  </div>
-                )}
-
-                <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Button type="button" variant="outline" onClick={goPrev} disabled={!canGoPrev}>
-                      Previous lesson
-                    </Button>
-                    <Button type="button" onClick={goNext} disabled={!canGoNext}>
-                      Next lesson
-                    </Button>
-                  </div>
-                  {activeLesson.testSetId && (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => startLessonTest(activeLesson.testSetId)}
-                      data-testid={`button-take-test-${activeLesson.id}`}
-                    >
-                      Take test now
-                    </Button>
-                  )}
-                </div>
+          {!isEnrolled ? (
+            <Card className="p-6 text-center">
+              <p className="text-sm text-gray-600">
+                {enrollmentStatus === "pending"
+                  ? "Your application is pending approval."
+                  : enrollmentStatus === "rejected"
+                    ? "Your application was rejected. You can re-apply when ready."
+                    : "Apply to join this course to unlock the lessons and practice tasks."}
+              </p>
+              <div className="mt-4 flex justify-center">
+                <Button
+                  disabled={applyMutation.isPending || !canApply}
+                  onClick={() => applyMutation.mutate(activeCourse.id)}
+                >
+                  {!isOpen
+                    ? "Enrollment closed"
+                    : enrollmentStatus === "pending"
+                      ? "Pending approval"
+                      : applyMutation.isPending
+                        ? "Submitting..."
+                        : enrollmentStatus === "rejected"
+                          ? "Re-apply"
+                          : "Apply to enroll"}
+                </Button>
               </div>
-            )}
-          </div>
+            </Card>
+          ) : (
+            <>
+              <div className="flex gap-3 justify-center flex-wrap">
+                <button
+                  data-testid="filter-lesson-all"
+                  onClick={() => setFilterSkill("")}
+                  className={`px-5 py-2 rounded-full font-medium transition-all ${
+                    filterSkill === ""
+                      ? "bg-gradient-to-r from-primary to-accent text-white shadow-md"
+                      : "bg-white/60 text-gray-700 hover:bg-white/80"
+                  }`}
+                >
+                  All skills
+                </button>
+                {[
+                  "Reading",
+                  "Listening",
+                  "Speaking",
+                  "Writing",
+                  "GrammarVocabulary",
+                  "General",
+                ].map((skill) => (
+                  <button
+                    key={skill}
+                    data-testid={`filter-lesson-${skill.toLowerCase()}`}
+                    onClick={() => setFilterSkill(skill)}
+                    className={`px-5 py-2 rounded-full font-medium transition-all ${
+                      filterSkill === skill
+                        ? "bg-gradient-to-r from-primary to-accent text-white shadow-md"
+                        : "bg-white/60 text-gray-700 hover:bg-white/80"
+                    }`}
+                  >
+                    {skillLabels[skill] ?? skill}
+                  </button>
+                ))}
+              </div>
+
+              {sortedLessons.length === 0 ? (
+                <div className="text-center py-20">
+                  <BookOpen className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                  <p className="text-gray-500 text-lg">No lessons available yet.</p>
+                </div>
+              ) : (
+                <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]" data-testid="lessons-grid">
+                  <div className="space-y-4">
+                    <div className="rounded-3xl border border-white/60 bg-white/80 p-5 shadow-lg backdrop-blur-xl">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Course outline</p>
+                          <p className="text-lg font-semibold text-gray-900">Lessons</p>
+                        </div>
+                        <span className="text-xs text-gray-500">{sortedLessons.length} steps</span>
+                      </div>
+                      <div className="mt-4 max-h-[520px] scroll-ghost overflow-y-auto space-y-2 pr-1">
+                        {sortedLessons.map((lesson, index) => {
+                          const isActive = activeLesson?.id === lesson.id;
+                          return (
+                            <button
+                              key={lesson.id}
+                              data-testid={`lesson-card-${lesson.id}`}
+                              onClick={() => setSelectedLesson(lesson)}
+                              className={`w-full rounded-2xl border px-4 py-3 text-left transition-all ${
+                                isActive
+                                  ? "border-primary/30 bg-primary/10 shadow-md"
+                                  : "border-white/70 bg-white/70 hover:bg-white"
+                              }`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div
+                                  className={`flex h-10 w-10 items-center justify-center rounded-xl text-sm font-semibold ${
+                                    isActive ? "bg-primary text-white" : "bg-gray-100 text-gray-600"
+                                  }`}
+                                >
+                                  {String(index + 1).padStart(2, "0")}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <p
+                                      className={`text-sm font-semibold ${
+                                        isActive ? "text-primary" : "text-gray-900"
+                                      }`}
+                                    >
+                                      {lesson.title}
+                                    </p>
+                                    {lesson.testSetId && (
+                                      <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-600">
+                                        Test
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="mt-1 text-xs text-gray-500 line-clamp-2">
+                                    {lesson.description || lesson.content}
+                                  </p>
+                                  <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-gray-500">
+                                    <span className="rounded-full bg-white/80 px-2 py-0.5">
+                                      {skillLabels[lesson.skill] ?? lesson.skill}
+                                    </span>
+                                    <span className="rounded-full bg-white/80 px-2 py-0.5">
+                                      {lesson.durationMinutes ? `${lesson.durationMinutes} min` : "Self-paced"}
+                                    </span>
+                                  </div>
+                                </div>
+                                {isActive && (
+                                  <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                                    Now
+                                  </span>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-5">
+                    {activeLesson && (
+                      <div className="rounded-3xl border border-white/60 bg-white/90 p-6 shadow-xl backdrop-blur-xl">
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.35em] text-gray-400">Now learning</p>
+                            <h2 className="text-2xl font-semibold text-gray-900">{activeLesson.title}</h2>
+                            <p className="mt-2 text-sm text-gray-600">
+                              {activeLesson.description || "No summary yet."}
+                            </p>
+                          </div>
+                          <Badge
+                            variant="secondary"
+                            className={
+                              activeLesson.skill === "Reading"
+                                ? "bg-blue-100 text-blue-700"
+                                : activeLesson.skill === "Listening"
+                                  ? "bg-cyan-100 text-cyan-700"
+                                  : activeLesson.skill === "Speaking"
+                                    ? "bg-green-100 text-green-700"
+                                    : activeLesson.skill === "Writing"
+                                      ? "bg-orange-100 text-orange-700"
+                                      : "bg-gray-100 text-gray-700"
+                            }
+                          >
+                            {activeLesson.skill}
+                          </Badge>
+                        </div>
+                        <div className="mt-4 flex flex-wrap gap-2 text-xs text-gray-500">
+                          <span className="rounded-full bg-gray-100 px-2 py-1">Lesson {progressLabel}</span>
+                          <span className="rounded-full bg-gray-100 px-2 py-1">
+                            {activeLesson.durationMinutes ? `${activeLesson.durationMinutes} min` : "Self-paced"}
+                          </span>
+                          {activeLesson.testSetId && (
+                            <span className="rounded-full bg-indigo-100 px-2 py-1 text-indigo-700">
+                              Test ready
+                            </span>
+                          )}
+                        </div>
+
+                        {activeLessonVideo ? (
+                          <div className="mt-5 overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
+                            <div className="relative w-full pt-[56.25%]">
+                              <iframe
+                                src={activeLessonVideo}
+                                title={`${activeLesson.title} video`}
+                                className="absolute inset-0 h-full w-full"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                              />
+                            </div>
+                          </div>
+                        ) : activeLesson.coverImageUrl ? (
+                          <div className="mt-5 overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
+                            <img
+                              src={activeLesson.coverImageUrl}
+                              alt={activeLesson.title}
+                              className="h-56 w-full object-cover"
+                            />
+                          </div>
+                        ) : null}
+
+                        <div className="mt-6 grid gap-4 md:grid-cols-3">
+                          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Objectives</p>
+                            {activeOutcomes.length > 0 ? (
+                              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
+                                {activeOutcomes.map((item, index) => (
+                                  <li key={`outcome-${index}`}>{item}</li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="mt-2 text-sm text-gray-400">No objectives added.</p>
+                            )}
+                          </div>
+                          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Key takeaways</p>
+                            {activeKeyPoints.length > 0 ? (
+                              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
+                                {activeKeyPoints.map((item, index) => (
+                                  <li key={`keypoint-${index}`}>{item}</li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="mt-2 text-sm text-gray-400">No key points added.</p>
+                            )}
+                          </div>
+                          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Practice</p>
+                            {activePractice.length > 0 ? (
+                              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
+                                {activePractice.map((item, index) => (
+                                  <li key={`practice-${index}`}>{item}</li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="mt-2 text-sm text-gray-400">No practice tasks yet.</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="mt-6 flex flex-wrap items-center gap-3">
+                          <Button variant="outline" onClick={goPrev} disabled={!canGoPrev}>
+                            Previous
+                          </Button>
+                          <Button variant="outline" onClick={goNext} disabled={!canGoNext}>
+                            Next
+                          </Button>
+                          {activeLesson?.testSetId && (
+                            <Button onClick={() => startLessonTest(activeLesson.testSetId)}>
+                              Start test
+                            </Button>
+                          )}
+                          {activeTestSetLabel && (
+                            <span className="text-xs text-gray-500">{activeTestSetLabel}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>
@@ -929,6 +1130,7 @@ function LessonsPage({ searchQuery }: { searchQuery: string }) {
 }
 
 // Tips Page Component
+
 function TipsPage({ searchQuery }: { searchQuery: string }) {
   const [filterSkill, setFilterSkill] = useState("");
 
