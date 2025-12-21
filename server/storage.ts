@@ -7,6 +7,11 @@ import {
   type InsertQuestion,
   type Tip,
   type InsertTip,
+  type Lesson,
+  type InsertLesson,
+  type Course,
+  type InsertCourse,
+  type CourseMember,
   type Media,
   type InsertMedia,
   type Activity,
@@ -137,6 +142,24 @@ export interface IStorage {
   updateTip(id: string, tip: Partial<InsertTip>): Promise<Tip | undefined>;
   deleteTip(id: string): Promise<boolean>;
 
+  // Lesson methods
+  getAllLessons(): Promise<Lesson[]>;
+  getLesson(id: string): Promise<Lesson | undefined>;
+  createLesson(lesson: InsertLesson): Promise<Lesson>;
+  updateLesson(id: string, lesson: Partial<InsertLesson>): Promise<Lesson | undefined>;
+  deleteLesson(id: string): Promise<boolean>;
+
+  // Course methods
+  getAllCourses(): Promise<Course[]>;
+  getCourse(id: string): Promise<Course | undefined>;
+  createCourse(course: InsertCourse): Promise<Course>;
+  updateCourse(id: string, course: Partial<InsertCourse>): Promise<Course | undefined>;
+  deleteCourse(id: string): Promise<boolean>;
+  getCourseMembers(courseId: string): Promise<CourseMember[]>;
+  getCourseMembersByUser(userId: string): Promise<CourseMember[]>;
+  applyToCourse(courseId: string, userId: string): Promise<CourseMember>;
+  updateCourseMemberStatus(memberId: string, status: string): Promise<CourseMember | undefined>;
+
   // Media methods
   getAllMedia(): Promise<Media[]>;
   getMedia(id: string): Promise<Media | undefined>;
@@ -153,6 +176,7 @@ export interface IStorage {
     setsCount: number;
     questionsCount: number;
     tipsCount: number;
+    lessonsCount: number;
     mediaCount: number;
   }>;
   getQuestionDistribution(): Promise<{
@@ -175,6 +199,9 @@ export class MemStorage implements IStorage {
   private testSets: Map<string, TestSet>;
   private questions: Map<string, Question>;
   private tips: Map<string, Tip>;
+  private lessons: Map<string, Lesson>;
+  private courses: Map<string, Course>;
+  private courseMembers: Map<string, CourseMember>;
   private media: Map<string, Media>;
   private activities: Map<string, Activity>;
   private templates: Map<string, QuestionTemplate>;
@@ -184,6 +211,9 @@ export class MemStorage implements IStorage {
     this.testSets = new Map();
     this.questions = new Map();
     this.tips = new Map();
+    this.lessons = new Map();
+    this.courses = new Map();
+    this.courseMembers = new Map();
     this.media = new Map();
     this.activities = new Map();
     this.templates = new Map();
@@ -310,6 +340,66 @@ export class MemStorage implements IStorage {
 
     for (const tip of sampleTips) {
       await this.createTip(tip);
+    }
+
+    const sampleLessons = [
+      {
+        title: "Reading fundamentals",
+        description: "Build a strong foundation for reading tasks.",
+        skill: "Reading",
+        status: "published",
+        content:
+          "Start with a quick preview: read the title, headings, and captions to predict the topic.\n\n" +
+          "Step 1 - Skim for the main idea. Read the first and last sentence of each paragraph.\n" +
+          "Step 2 - Scan for details. Look for names, dates, numbers, and repeated keywords.\n\n" +
+          "Finish by summarizing the passage in one sentence before answering the questions.",
+        outcomes: ["Identify main ideas quickly", "Locate supporting details efficiently"],
+        keyPoints: ["Skim headings first", "Scan for names, dates, and keywords"],
+        practicePrompts: ["Practice with a 150-word article and note the main idea."],
+        durationMinutes: 20,
+        orderIndex: 1,
+        youtubeUrl: "https://www.youtube.com/watch?v=1c8n9A6x7Z8",
+      },
+      {
+        title: "Listening note-taking",
+        description: "Practice structured notes for audio prompts.",
+        skill: "Listening",
+        status: "published",
+        content:
+          "Prepare a simple notes template with three columns: topic, key facts, and follow up actions.\n\n" +
+          "During the first listen, focus on the speaker's goal and write only keywords.\n" +
+          "During the second listen, capture numbers, dates, and specific names.\n\n" +
+          "Review your notes and turn them into a short summary before answering.",
+        outcomes: ["Summarize the speaker's intent", "Record key facts while listening"],
+        keyPoints: ["Write keywords, not full sentences", "Use arrows to connect ideas"],
+        practicePrompts: ["Listen to a 1-minute clip and capture 5 key facts."],
+        durationMinutes: 15,
+        orderIndex: 2,
+        youtubeUrl: "https://www.youtube.com/watch?v=7k9d7x1Zs9Y",
+      },
+    ];
+
+    for (const lesson of sampleLessons) {
+      await this.createLesson(lesson);
+    }
+
+    const sampleCourses = [
+      {
+        code: "APTIS-FOUND",
+        name: "APTIS Foundation Course",
+        description: "A structured starter path covering core reading and listening skills.",
+        status: "open",
+      },
+      {
+        code: "APTIS-EXAM",
+        name: "APTIS Exam Booster",
+        description: "Advanced exam strategies, timed practice, and feedback sessions.",
+        status: "open",
+      },
+    ];
+
+    for (const course of sampleCourses) {
+      await this.createCourse(course);
     }
 
     for (const template of DEFAULT_TEMPLATE_SEEDS) {
@@ -585,6 +675,198 @@ export class MemStorage implements IStorage {
     return true;
   }
 
+  // Lesson methods
+  async getAllLessons(): Promise<Lesson[]> {
+    return Array.from(this.lessons.values()).sort(
+      (a, b) =>
+        new Date(b.updatedAt ?? b.createdAt).getTime() -
+        new Date(a.updatedAt ?? a.createdAt).getTime(),
+    );
+  }
+
+  async getLesson(id: string): Promise<Lesson | undefined> {
+    return this.lessons.get(id);
+  }
+
+  async createLesson(insertLesson: InsertLesson): Promise<Lesson> {
+    const id = randomUUID();
+    const now = new Date();
+    const lesson: Lesson = {
+      ...insertLesson,
+      id,
+      description: insertLesson.description ?? null,
+      status: insertLesson.status ?? "draft",
+      outcomes: insertLesson.outcomes ?? [],
+      keyPoints: insertLesson.keyPoints ?? [],
+      practicePrompts: insertLesson.practicePrompts ?? [],
+      testSetId: insertLesson.testSetId ?? null,
+      courseId: insertLesson.courseId ?? null,
+      durationMinutes: insertLesson.durationMinutes ?? null,
+      orderIndex: insertLesson.orderIndex ?? null,
+      coverImageUrl: insertLesson.coverImageUrl ?? null,
+      youtubeUrl: insertLesson.youtubeUrl ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.lessons.set(id, lesson);
+
+    await this.createActivity({
+      action: "created",
+      resourceType: "lesson",
+      resourceTitle: lesson.title,
+    });
+
+    return lesson;
+  }
+
+  async updateLesson(id: string, update: Partial<InsertLesson>): Promise<Lesson | undefined> {
+    const existing = this.lessons.get(id);
+    if (!existing) return undefined;
+
+    const updated: Lesson = {
+      ...existing,
+      ...update,
+      updatedAt: new Date(),
+    };
+    this.lessons.set(id, updated);
+
+    await this.createActivity({
+      action: "updated",
+      resourceType: "lesson",
+      resourceTitle: updated.title,
+    });
+
+    return updated;
+  }
+
+  async deleteLesson(id: string): Promise<boolean> {
+    const existing = this.lessons.get(id);
+    if (!existing) return false;
+
+    this.lessons.delete(id);
+
+    await this.createActivity({
+      action: "deleted",
+      resourceType: "lesson",
+      resourceTitle: existing.title,
+    });
+
+    return true;
+  }
+
+  // Course methods
+  async getAllCourses(): Promise<Course[]> {
+    return Array.from(this.courses.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  }
+
+  async getCourse(id: string): Promise<Course | undefined> {
+    return this.courses.get(id);
+  }
+
+  async createCourse(insertCourse: InsertCourse): Promise<Course> {
+    const id = randomUUID();
+    const now = new Date();
+    const course: Course = {
+      ...insertCourse,
+      id,
+      description: insertCourse.description ?? null,
+      status: insertCourse.status ?? "open",
+      createdBy: insertCourse.createdBy ?? null,
+      createdAt: now,
+    } as Course;
+    this.courses.set(id, course);
+
+    await this.createActivity({
+      action: "created",
+      resourceType: "course",
+      resourceTitle: course.name,
+    });
+
+    return course;
+  }
+
+  async updateCourse(id: string, update: Partial<InsertCourse>): Promise<Course | undefined> {
+    const existing = this.courses.get(id);
+    if (!existing) return undefined;
+    const updated: Course = {
+      ...existing,
+      ...update,
+      description: update.description ?? existing.description,
+      status: update.status ?? existing.status,
+    } as Course;
+    this.courses.set(id, updated);
+
+    await this.createActivity({
+      action: "updated",
+      resourceType: "course",
+      resourceTitle: updated.name,
+    });
+
+    return updated;
+  }
+
+  async deleteCourse(id: string): Promise<boolean> {
+    const existing = this.courses.get(id);
+    if (!existing) return false;
+    this.courses.delete(id);
+    for (const [memberId, member] of this.courseMembers.entries()) {
+      if (member.courseId === id) {
+        this.courseMembers.delete(memberId);
+      }
+    }
+
+    await this.createActivity({
+      action: "deleted",
+      resourceType: "course",
+      resourceTitle: existing.name,
+    });
+
+    return true;
+  }
+
+  async getCourseMembers(courseId: string): Promise<CourseMember[]> {
+    return Array.from(this.courseMembers.values()).filter((member) => member.courseId === courseId);
+  }
+
+  async getCourseMembersByUser(userId: string): Promise<CourseMember[]> {
+    return Array.from(this.courseMembers.values()).filter((member) => member.userId === userId);
+  }
+
+  async applyToCourse(courseId: string, userId: string): Promise<CourseMember> {
+    const existing = Array.from(this.courseMembers.values()).find(
+      (member) => member.courseId === courseId && member.userId === userId,
+    );
+    if (existing) {
+      if (existing.status === "rejected") {
+        const updated = { ...existing, status: "pending" } as CourseMember;
+        this.courseMembers.set(existing.id, updated);
+        return updated;
+      }
+      return existing;
+    }
+    const id = randomUUID();
+    const member: CourseMember = {
+      id,
+      courseId,
+      userId,
+      role: "student",
+      status: "pending",
+      joinedAt: new Date(),
+    } as CourseMember;
+    this.courseMembers.set(id, member);
+    return member;
+  }
+
+  async updateCourseMemberStatus(memberId: string, status: string): Promise<CourseMember | undefined> {
+    const existing = this.courseMembers.get(memberId);
+    if (!existing) return undefined;
+    const updated = { ...existing, status } as CourseMember;
+    this.courseMembers.set(memberId, updated);
+    return updated;
+  }
+
   // Media methods
   async getAllMedia(): Promise<Media[]> {
     return Array.from(this.media.values()).sort(
@@ -659,12 +941,14 @@ export class MemStorage implements IStorage {
     setsCount: number;
     questionsCount: number;
     tipsCount: number;
+    lessonsCount: number;
     mediaCount: number;
   }> {
     return {
       setsCount: this.testSets.size,
       questionsCount: this.questions.size,
       tipsCount: this.tips.size,
+      lessonsCount: this.lessons.size,
       mediaCount: this.media.size,
     };
   }
@@ -1147,6 +1431,312 @@ class SqlStorage implements IStorage {
     return (result.rowsAffected?.[0] ?? 0) > 0;
   }
 
+  // Lessons
+  async getAllLessons(): Promise<Lesson[]> {
+    const result = await query(`
+      SELECT id, title, [description], skill, content, [status], testSetId, courseId,
+             outcomesJson, keyPointsJson, practicePromptsJson,
+             durationMinutes, orderIndex, coverImageUrl, youtubeUrl, createdAt, updatedAt
+      FROM dbo.aptis_lessons
+      ORDER BY createdAt DESC
+    `);
+    return (result.recordset || []).map((r: any) => ({
+      id: String(r.id),
+      title: r.title,
+        description: r.description ?? null,
+        skill: r.skill ?? "General",
+        status: r.status ?? "draft",
+        content: r.content,
+        testSetId: r.testSetId ? String(r.testSetId) : null,
+        courseId: r.courseId ? String(r.courseId) : null,
+        outcomes: safeParseJsonArray(r.outcomesJson),
+        keyPoints: safeParseJsonArray(r.keyPointsJson),
+        practicePrompts: safeParseJsonArray(r.practicePromptsJson),
+        durationMinutes: r.durationMinutes ?? null,
+        orderIndex: r.orderIndex ?? null,
+      coverImageUrl: r.coverImageUrl ?? null,
+      youtubeUrl: r.youtubeUrl ?? null,
+      createdAt: r.createdAt ?? new Date(),
+      updatedAt: r.updatedAt ?? r.createdAt ?? new Date(),
+    } as unknown as Lesson));
+  }
+
+  async getLesson(id: string): Promise<Lesson | undefined> {
+    const idNum = parseInt(id, 10);
+    const result = await query(
+      `SELECT id, title, [description], skill, content, [status], testSetId, courseId,
+              outcomesJson, keyPointsJson, practicePromptsJson,
+              durationMinutes, orderIndex, coverImageUrl, youtubeUrl, createdAt, updatedAt
+       FROM dbo.aptis_lessons
+       WHERE id = @p0`,
+      [idNum],
+    );
+    const r = result.recordset?.[0];
+    if (!r) return undefined;
+    return {
+      id: String(r.id),
+      title: r.title,
+        description: r.description ?? null,
+        skill: r.skill ?? "General",
+        status: r.status ?? "draft",
+        content: r.content,
+        testSetId: r.testSetId ? String(r.testSetId) : null,
+        courseId: r.courseId ? String(r.courseId) : null,
+        outcomes: safeParseJsonArray(r.outcomesJson),
+        keyPoints: safeParseJsonArray(r.keyPointsJson),
+        practicePrompts: safeParseJsonArray(r.practicePromptsJson),
+        durationMinutes: r.durationMinutes ?? null,
+        orderIndex: r.orderIndex ?? null,
+      coverImageUrl: r.coverImageUrl ?? null,
+      youtubeUrl: r.youtubeUrl ?? null,
+      createdAt: r.createdAt ?? new Date(),
+      updatedAt: r.updatedAt ?? r.createdAt ?? new Date(),
+    } as unknown as Lesson;
+  }
+
+  async createLesson(lesson: InsertLesson): Promise<Lesson> {
+    const result = await query(
+      `INSERT INTO dbo.aptis_lessons(title, [description], skill, content, [status], testSetId, courseId, outcomesJson, keyPointsJson, practicePromptsJson, durationMinutes, orderIndex, coverImageUrl, youtubeUrl)
+       OUTPUT INSERTED.id
+       VALUES(@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, @p10, @p11, @p12, @p13)`,
+      [
+        lesson.title,
+        lesson.description ?? null,
+        lesson.skill,
+        lesson.content,
+        lesson.status ?? "draft",
+        lesson.testSetId ? parseInt(String(lesson.testSetId), 10) : null,
+        lesson.courseId ? parseInt(String(lesson.courseId), 10) : null,
+        lesson.outcomes ? JSON.stringify(lesson.outcomes) : null,
+        lesson.keyPoints ? JSON.stringify(lesson.keyPoints) : null,
+        lesson.practicePrompts ? JSON.stringify(lesson.practicePrompts) : null,
+        lesson.durationMinutes ?? null,
+        lesson.orderIndex ?? null,
+        lesson.coverImageUrl ?? null,
+        lesson.youtubeUrl ?? null,
+      ],
+    );
+    const id = String(result.recordset[0].id);
+    const created = await this.getLesson(id);
+    if (!created) throw new Error("Failed to create lesson");
+    return created;
+  }
+
+  async updateLesson(id: string, lesson: Partial<InsertLesson>): Promise<Lesson | undefined> {
+    const idNum = parseInt(id, 10);
+    const fields: string[] = [];
+    const params: any[] = [];
+    if (lesson.title !== undefined) { fields.push('title = @p' + params.length); params.push(lesson.title); }
+    if (lesson.description !== undefined) { fields.push('[description] = @p' + params.length); params.push(lesson.description); }
+    if (lesson.skill !== undefined) { fields.push('skill = @p' + params.length); params.push(lesson.skill); }
+    if (lesson.content !== undefined) { fields.push('content = @p' + params.length); params.push(lesson.content); }
+      if (lesson.status !== undefined) { fields.push('[status] = @p' + params.length); params.push(lesson.status); }
+      if (lesson.testSetId !== undefined) { fields.push('testSetId = @p' + params.length); params.push(lesson.testSetId ? parseInt(String(lesson.testSetId), 10) : null); }
+      if (lesson.courseId !== undefined) { fields.push('courseId = @p' + params.length); params.push(lesson.courseId ? parseInt(String(lesson.courseId), 10) : null); }
+      if (lesson.outcomes !== undefined) { fields.push('outcomesJson = @p' + params.length); params.push(lesson.outcomes ? JSON.stringify(lesson.outcomes) : null); }
+    if (lesson.keyPoints !== undefined) { fields.push('keyPointsJson = @p' + params.length); params.push(lesson.keyPoints ? JSON.stringify(lesson.keyPoints) : null); }
+    if (lesson.practicePrompts !== undefined) { fields.push('practicePromptsJson = @p' + params.length); params.push(lesson.practicePrompts ? JSON.stringify(lesson.practicePrompts) : null); }
+    if (lesson.durationMinutes !== undefined) { fields.push('durationMinutes = @p' + params.length); params.push(lesson.durationMinutes); }
+    if (lesson.orderIndex !== undefined) { fields.push('orderIndex = @p' + params.length); params.push(lesson.orderIndex); }
+    if (lesson.coverImageUrl !== undefined) { fields.push('coverImageUrl = @p' + params.length); params.push(lesson.coverImageUrl); }
+    if (lesson.youtubeUrl !== undefined) { fields.push('youtubeUrl = @p' + params.length); params.push(lesson.youtubeUrl); }
+    if (fields.length === 0) return this.getLesson(id);
+    fields.push('updatedAt = SYSUTCDATETIME()');
+    const setClause = fields.join(', ');
+    await query(`UPDATE dbo.aptis_lessons SET ${setClause} WHERE id = @p${params.length}`, [...params, idNum]);
+    return this.getLesson(id);
+  }
+
+  async deleteLesson(id: string): Promise<boolean> {
+    const idNum = parseInt(id, 10);
+    const result = await query(`DELETE FROM dbo.aptis_lessons WHERE id = @p0`, [idNum]);
+    return (result.rowsAffected?.[0] ?? 0) > 0;
+  }
+
+  // Courses
+  async getAllCourses(): Promise<Course[]> {
+    const result = await query(`
+      SELECT id, code, name, [description], [status], createdBy, createdAt
+      FROM dbo.aptis_classes
+      ORDER BY createdAt DESC
+    `);
+    return (result.recordset || []).map((r: any) => ({
+      id: String(r.id),
+      code: r.code,
+      name: r.name,
+      description: r.description ?? null,
+      status: r.status ?? "open",
+      createdBy: r.createdBy ? String(r.createdBy) : null,
+      createdAt: r.createdAt ?? new Date(),
+    } as Course));
+  }
+
+  async getCourse(id: string): Promise<Course | undefined> {
+    const idNum = parseInt(id, 10);
+    const result = await query(
+      `SELECT id, code, name, [description], [status], createdBy, createdAt FROM dbo.aptis_classes WHERE id = @p0`,
+      [idNum],
+    );
+    const r = result.recordset?.[0];
+    if (!r) return undefined;
+    return {
+      id: String(r.id),
+      code: r.code,
+      name: r.name,
+      description: r.description ?? null,
+      status: r.status ?? "open",
+      createdBy: r.createdBy ? String(r.createdBy) : null,
+      createdAt: r.createdAt ?? new Date(),
+    } as Course;
+  }
+
+  async createCourse(course: InsertCourse): Promise<Course> {
+    const result = await query(
+      `INSERT INTO dbo.aptis_classes(code, name, [description], [status], createdBy)
+       OUTPUT INSERTED.id
+       VALUES(@p0, @p1, @p2, @p3, @p4)`,
+      [
+        course.code,
+        course.name,
+        course.description ?? null,
+        course.status ?? "open",
+        course.createdBy ? parseInt(String(course.createdBy), 10) : null,
+      ],
+    );
+    const id = String(result.recordset[0].id);
+    const created = await this.getCourse(id);
+    if (!created) throw new Error("Failed to create course");
+    return created;
+  }
+
+  async updateCourse(id: string, course: Partial<InsertCourse>): Promise<Course | undefined> {
+    const idNum = parseInt(id, 10);
+    const fields: string[] = [];
+    const params: any[] = [];
+    if (course.code !== undefined) { fields.push('code = @p' + params.length); params.push(course.code); }
+    if (course.name !== undefined) { fields.push('name = @p' + params.length); params.push(course.name); }
+    if (course.description !== undefined) { fields.push('[description] = @p' + params.length); params.push(course.description); }
+    if (course.status !== undefined) { fields.push('[status] = @p' + params.length); params.push(course.status); }
+    if (fields.length === 0) return this.getCourse(id);
+    const setClause = fields.join(', ');
+    await query(`UPDATE dbo.aptis_classes SET ${setClause} WHERE id = @p${params.length}`, [...params, idNum]);
+    return this.getCourse(id);
+  }
+
+  async deleteCourse(id: string): Promise<boolean> {
+    const idNum = parseInt(id, 10);
+    const result = await query(`DELETE FROM dbo.aptis_classes WHERE id = @p0`, [idNum]);
+    return (result.rowsAffected?.[0] ?? 0) > 0;
+  }
+
+  async getCourseMembers(courseId: string): Promise<CourseMember[]> {
+    const idNum = parseInt(courseId, 10);
+    const result = await query(
+      `SELECT id, classId, userId, roleInClass, [status], joinedAt
+       FROM dbo.aptis_class_members
+       WHERE classId = @p0
+       ORDER BY joinedAt DESC`,
+      [idNum],
+    );
+    return (result.recordset || []).map((r: any) => ({
+      id: String(r.id),
+      courseId: String(r.classId),
+      userId: String(r.userId),
+      role: r.roleInClass ?? "student",
+      status: r.status ?? "pending",
+      joinedAt: r.joinedAt ?? new Date(),
+    } as CourseMember));
+  }
+
+  async getCourseMembersByUser(userId: string): Promise<CourseMember[]> {
+    const userNum = parseInt(userId, 10);
+    const result = await query(
+      `SELECT id, classId, userId, roleInClass, [status], joinedAt
+       FROM dbo.aptis_class_members
+       WHERE userId = @p0`,
+      [userNum],
+    );
+    return (result.recordset || []).map((r: any) => ({
+      id: String(r.id),
+      courseId: String(r.classId),
+      userId: String(r.userId),
+      role: r.roleInClass ?? "student",
+      status: r.status ?? "pending",
+      joinedAt: r.joinedAt ?? new Date(),
+    } as CourseMember));
+  }
+
+  async applyToCourse(courseId: string, userId: string): Promise<CourseMember> {
+    const classId = parseInt(courseId, 10);
+    const userNum = parseInt(userId, 10);
+    const existing = await query(
+      `SELECT TOP 1 id, classId, userId, roleInClass, [status], joinedAt
+       FROM dbo.aptis_class_members
+       WHERE classId = @p0 AND userId = @p1`,
+      [classId, userNum],
+    );
+    const row = existing.recordset?.[0];
+    if (row) {
+      if (row.status === "rejected") {
+        await query(`UPDATE dbo.aptis_class_members SET [status] = N'pending' WHERE id = @p0`, [row.id]);
+      }
+      const updated = await query(
+        `SELECT TOP 1 id, classId, userId, roleInClass, [status], joinedAt FROM dbo.aptis_class_members WHERE id = @p0`,
+        [row.id],
+      );
+      const r = updated.recordset?.[0] ?? row;
+      return {
+        id: String(r.id),
+        courseId: String(r.classId),
+        userId: String(r.userId),
+        role: r.roleInClass ?? "student",
+        status: r.status ?? "pending",
+        joinedAt: r.joinedAt ?? new Date(),
+      } as CourseMember;
+    }
+
+    const insert = await query(
+      `INSERT INTO dbo.aptis_class_members(classId, userId, roleInClass, [status])
+       OUTPUT INSERTED.id
+       VALUES(@p0, @p1, @p2, @p3)`,
+      [classId, userNum, "student", "pending"],
+    );
+    const memberId = insert.recordset[0].id;
+    const created = await query(
+      `SELECT TOP 1 id, classId, userId, roleInClass, [status], joinedAt FROM dbo.aptis_class_members WHERE id = @p0`,
+      [memberId],
+    );
+    const r = created.recordset?.[0];
+    if (!r) throw new Error("Failed to apply to course");
+    return {
+      id: String(r.id),
+      courseId: String(r.classId),
+      userId: String(r.userId),
+      role: r.roleInClass ?? "student",
+      status: r.status ?? "pending",
+      joinedAt: r.joinedAt ?? new Date(),
+    } as CourseMember;
+  }
+
+  async updateCourseMemberStatus(memberId: string, status: string): Promise<CourseMember | undefined> {
+    const idNum = parseInt(memberId, 10);
+    await query(`UPDATE dbo.aptis_class_members SET [status] = @p0 WHERE id = @p1`, [status, idNum]);
+    const result = await query(
+      `SELECT TOP 1 id, classId, userId, roleInClass, [status], joinedAt FROM dbo.aptis_class_members WHERE id = @p0`,
+      [idNum],
+    );
+    const r = result.recordset?.[0];
+    if (!r) return undefined;
+    return {
+      id: String(r.id),
+      courseId: String(r.classId),
+      userId: String(r.userId),
+      role: r.roleInClass ?? "student",
+      status: r.status ?? "pending",
+      joinedAt: r.joinedAt ?? new Date(),
+    } as CourseMember;
+  }
+
   // Media
   async getAllMedia(): Promise<Media[]> {
     const result = await query(`
@@ -1239,17 +1829,19 @@ class SqlStorage implements IStorage {
     } as unknown as Activity;
   }
 
-  async getStats(): Promise<{ setsCount: number; questionsCount: number; tipsCount: number; mediaCount: number; }> {
-    const [sets, questions, tips, media] = await Promise.all([
+  async getStats(): Promise<{ setsCount: number; questionsCount: number; tipsCount: number; lessonsCount: number; mediaCount: number; }> {
+    const [sets, questions, tips, lessons, media] = await Promise.all([
       query(`SELECT COUNT(*) AS c FROM dbo.aptis_sets`),
       query(`SELECT COUNT(*) AS c FROM dbo.aptis_questions`),
       query(`SELECT COUNT(*) AS c FROM dbo.aptis_tips`),
+      query(`SELECT COUNT(*) AS c FROM dbo.aptis_lessons`),
       query(`SELECT COUNT(*) AS c FROM dbo.aptis_media`),
     ]);
     return {
       setsCount: sets.recordset?.[0]?.c ?? 0,
       questionsCount: questions.recordset?.[0]?.c ?? 0,
       tipsCount: tips.recordset?.[0]?.c ?? 0,
+      lessonsCount: lessons.recordset?.[0]?.c ?? 0,
       mediaCount: media.recordset?.[0]?.c ?? 0,
     };
   }

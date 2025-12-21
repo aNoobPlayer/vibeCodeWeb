@@ -5,6 +5,7 @@ import {
   insertTestSetSchema,
   insertQuestionSchema,
   insertTipSchema,
+  insertLessonSchema,
   insertMediaSchema,
   insertUserSchema,
   type User,
@@ -26,6 +27,8 @@ const loginSchema = z.object({
 
 const QUESTION_SKILLS = ["Reading", "Listening", "Speaking", "Writing", "GrammarVocabulary", "General"] as const;
 const QUESTION_TYPES = ["mcq_single", "mcq_multi", "fill_blank", "writing_prompt", "speaking_prompt"] as const;
+const COURSE_STATUSES = ["open", "closed"] as const;
+const COURSE_MEMBER_STATUSES = ["pending", "approved", "rejected"] as const;
 
 const templateSchema = z.object({
   label: z.string().min(1),
@@ -39,6 +42,15 @@ const templateSchema = z.object({
   difficulty: z.string().max(20).optional().nullable(),
 });
 const templateUpdateSchema = templateSchema.partial();
+
+const courseSchema = z.object({
+  name: z.string().min(2),
+  code: z.string().min(2).max(50),
+  description: z.string().optional().nullable(),
+  status: z.enum(COURSE_STATUSES).optional(),
+});
+const courseUpdateSchema = courseSchema.partial();
+const courseMemberStatusSchema = z.enum(COURSE_MEMBER_STATUSES);
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Simple auth gate for protected routes
@@ -85,6 +97,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     createdAt: user.createdAt ? new Date(user.createdAt).toISOString() : null,
     lastLogin: user.lastLogin ? new Date(user.lastLogin).toISOString() : null,
   });
+
+  const getPublicBaseUrl = (req: any) => {
+    const envBase = process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL;
+    if (envBase) return envBase.replace(/\/$/, "");
+    const proto = (req.headers["x-forwarded-proto"] || req.protocol || "http").toString().split(",")[0].trim();
+    const host = (req.headers["x-forwarded-host"] || req.get("host") || "").toString().split(",")[0].trim();
+    return `${proto}://${host}`;
+  };
+
+  const resolvePublicUrl = (req: any, url?: string | null) => {
+    if (!url) return url ?? null;
+    if (/^https?:\/\//i.test(url)) return url;
+    if (url.startsWith("/")) return `${getPublicBaseUrl(req)}${url}`;
+    return url;
+  };
   // Health endpoint
   app.get("/api/health", async (_req, res) => {
     try {
@@ -510,7 +537,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           content: r.stem,
           options: r.optionsJson ? JSON.parse(r.optionsJson) : [],
           correctAnswers: r.answerKey ? JSON.parse(r.answerKey) : [],
-          mediaUrl: r.mediaUrl ?? null,
+          mediaUrl: resolvePublicUrl(req, r.mediaUrl ?? null),
           explanation: r.explain ?? null,
         }));
 
@@ -541,7 +568,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const start = (page - 1) * size;
-      const paged = list.slice(start, start + size);
+      const paged = list.slice(start, start + size).map((question) => ({
+        ...question,
+        mediaUrl: resolvePublicUrl(req, question.mediaUrl ?? null),
+      }));
       const total = list.length;
 
       res.json({
@@ -584,7 +614,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!question) {
         return res.status(404).json({ error: "Question not found" });
       }
-      res.json(question);
+      res.json({
+        ...question,
+        mediaUrl: resolvePublicUrl(req, question.mediaUrl ?? null),
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -597,7 +630,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: fromZodError(result.error).message });
       }
       const question = await storage.createQuestion(result.data);
-      res.status(201).json(question);
+      res.status(201).json({
+        ...question,
+        mediaUrl: resolvePublicUrl(req, question.mediaUrl ?? null),
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -613,7 +649,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!question) {
         return res.status(404).json({ error: "Question not found" });
       }
-      res.json(question);
+      res.json({
+        ...question,
+        mediaUrl: resolvePublicUrl(req, question.mediaUrl ?? null),
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -844,11 +883,320 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Lesson endpoints
+    app.get("/api/lessons", async (req, res) => {
+      try {
+        const { skill, status, search, courseId } = req.query as Record<string, string | undefined>;
+        let lessons = await storage.getAllLessons();
+        if (skill && skill !== "all") {
+          lessons = lessons.filter((lesson) => lesson.skill === skill);
+        }
+        if (status && status !== "all") {
+          lessons = lessons.filter((lesson) => lesson.status === status);
+        }
+        if (courseId && courseId !== "all") {
+          lessons = lessons.filter((lesson) => String(lesson.courseId ?? "") === String(courseId));
+        }
+        if (search) {
+          const q = search.toLowerCase();
+          lessons = lessons.filter((lesson) => {
+            const hay = `${lesson.title} ${lesson.description ?? ""} ${lesson.content}`.toLowerCase();
+            return hay.includes(q);
+        });
+      }
+      res.json(lessons);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/lessons/:id", async (req, res) => {
+    try {
+      const lesson = await storage.getLesson(req.params.id);
+      if (!lesson) {
+        return res.status(404).json({ error: "Lesson not found" });
+      }
+      res.json(lesson);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/lessons", async (req, res) => {
+    try {
+      const result = insertLessonSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: fromZodError(result.error).message });
+      }
+      const lesson = await storage.createLesson(result.data);
+      res.status(201).json(lesson);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/lessons/:id", async (req, res) => {
+    try {
+      const result = insertLessonSchema.partial().safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: fromZodError(result.error).message });
+      }
+      const lesson = await storage.updateLesson(req.params.id, result.data);
+      if (!lesson) {
+        return res.status(404).json({ error: "Lesson not found" });
+      }
+      res.json(lesson);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/lessons/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteLesson(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: "Lesson not found" });
+      }
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Courses endpoints
+  app.get("/api/courses", requireAuth, async (req, res) => {
+    try {
+      const userId = String(req.session.userId);
+      if (process.env.DATABASE_URL) {
+        const userNum = parseInt(userId, 10);
+        const result = await query(
+          `
+          SELECT c.id, c.code, c.name, c.[description], c.[status], c.createdBy, c.createdAt,
+                 m.[status] AS enrollmentStatus
+          FROM dbo.aptis_classes c
+          LEFT JOIN dbo.aptis_class_members m ON m.classId = c.id AND m.userId = @p0
+          ORDER BY c.createdAt DESC
+          `,
+          [userNum],
+        );
+        const rows = (result.recordset || []).map((r: any) => ({
+          id: String(r.id),
+          code: r.code,
+          name: r.name,
+          description: r.description ?? null,
+          status: r.status ?? "open",
+          createdBy: r.createdBy ? String(r.createdBy) : null,
+          createdAt: r.createdAt ?? new Date(),
+          enrollmentStatus: r.enrollmentStatus ?? "none",
+        }));
+        return res.json(rows);
+      }
+
+      const courses = await storage.getAllCourses();
+      const memberships = await storage.getCourseMembersByUser(userId);
+      const membershipMap = new Map(memberships.map((member) => [member.courseId, member.status]));
+      const payload = courses.map((course) => ({
+        ...course,
+        enrollmentStatus: membershipMap.get(course.id) ?? "none",
+      }));
+      res.json(payload);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/courses/:id/apply", requireAuth, async (req, res) => {
+    try {
+      const userId = String(req.session.userId);
+      const courseId = req.params.id;
+      const course = await storage.getCourse(courseId);
+      if (!course) {
+        return res.status(404).json({ error: "Course not found" });
+      }
+      if (course.status && course.status !== "open") {
+        return res.status(400).json({ error: "Course is not open for enrollment" });
+      }
+      const member = await storage.applyToCourse(courseId, userId);
+      res.status(201).json(member);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Admin course management
+    app.get("/api/admin/courses", requireAdmin, async (_req, res) => {
+      try {
+        if (process.env.DATABASE_URL) {
+          const result = await query(
+            `
+            SELECT c.id, c.code, c.name, c.[description], c.[status], c.createdBy, c.createdAt,
+                   (SELECT COUNT(*) FROM dbo.aptis_class_members m WHERE m.classId = c.id AND m.[status] = N'pending') AS pendingCount,
+                   (SELECT COUNT(*) FROM dbo.aptis_class_members m WHERE m.classId = c.id AND m.[status] = N'approved') AS approvedCount,
+                   (SELECT COUNT(*) FROM dbo.aptis_lessons l WHERE l.courseId = c.id) AS lessonCount
+            FROM dbo.aptis_classes c
+            ORDER BY c.createdAt DESC
+            `
+          );
+          return res.json(
+            (result.recordset || []).map((r: any) => ({
+              id: String(r.id),
+              code: r.code,
+              name: r.name,
+              description: r.description ?? null,
+              status: r.status ?? "open",
+              createdBy: r.createdBy ? String(r.createdBy) : null,
+              createdAt: r.createdAt ?? new Date(),
+              pendingCount: r.pendingCount ?? 0,
+              approvedCount: r.approvedCount ?? 0,
+              lessonCount: r.lessonCount ?? 0,
+            }))
+          );
+        }
+
+        const courses = await storage.getAllCourses();
+        const lessons = await storage.getAllLessons();
+        const payload = await Promise.all(
+          courses.map(async (course) => {
+            const members = await storage.getCourseMembers(course.id);
+            return {
+              ...course,
+              pendingCount: members.filter((member) => member.status === "pending").length,
+              approvedCount: members.filter((member) => member.status === "approved").length,
+              lessonCount: lessons.filter((lesson) => String(lesson.courseId ?? "") === course.id).length,
+            };
+          }),
+        );
+      res.json(payload);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/courses", requireAdmin, async (req, res) => {
+    try {
+      const parsed = courseSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: fromZodError(parsed.error).message });
+      }
+      const payload = parsed.data;
+      const created = await storage.createCourse({
+        ...payload,
+        createdBy: String(req.session.userId),
+      });
+      res.status(201).json(created);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/admin/courses/:id", requireAdmin, async (req, res) => {
+    try {
+      const parsed = courseUpdateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: fromZodError(parsed.error).message });
+      }
+      const updated = await storage.updateCourse(req.params.id, parsed.data);
+      if (!updated) {
+        return res.status(404).json({ error: "Course not found" });
+      }
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/admin/courses/:id", requireAdmin, async (req, res) => {
+    try {
+      const success = await storage.deleteCourse(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: "Course not found" });
+      }
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/admin/courses/:id/applications", requireAdmin, async (req, res) => {
+    try {
+      const courseId = req.params.id;
+      const status = req.query.status as string | undefined;
+      if (process.env.DATABASE_URL) {
+        const courseNum = parseInt(courseId, 10);
+        const params: any[] = [courseNum];
+        let statusClause = "";
+        if (status) {
+          params.push(status);
+          statusClause = ` AND m.[status] = @p${params.length - 1}`;
+        }
+        const result = await query(
+          `
+          SELECT m.id, m.classId, m.userId, m.roleInClass, m.[status], m.joinedAt,
+                 u.email, u.name, u.avatar
+          FROM dbo.aptis_class_members m
+          JOIN dbo.aptis_users u ON u.id = m.userId
+          WHERE m.classId = @p0${statusClause}
+          ORDER BY m.joinedAt DESC
+          `,
+          params,
+        );
+        return res.json(
+          (result.recordset || []).map((r: any) => ({
+            id: String(r.id),
+            courseId: String(r.classId),
+            userId: String(r.userId),
+            role: r.roleInClass ?? "student",
+            status: r.status ?? "pending",
+            joinedAt: r.joinedAt ?? new Date(),
+            username: r.email ?? r.name ?? "Student",
+            avatar: r.avatar ?? null,
+          }))
+        );
+      }
+
+      const members = await storage.getCourseMembers(courseId);
+      const filtered = status ? members.filter((member) => member.status === status) : members;
+      const withUsers = await Promise.all(
+        filtered.map(async (member) => {
+          const user = await storage.getUser(member.userId);
+          return {
+            ...member,
+            username: user?.username ?? "Student",
+            avatar: user?.avatar ?? null,
+          };
+        }),
+      );
+      res.json(withUsers);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/admin/course-members/:id", requireAdmin, async (req, res) => {
+    try {
+      const parsed = z.object({ status: courseMemberStatusSchema }).safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: fromZodError(parsed.error).message });
+      }
+      const updated = await storage.updateCourseMemberStatus(req.params.id, parsed.data.status);
+      if (!updated) {
+        return res.status(404).json({ error: "Course member not found" });
+      }
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Media endpoints
-  app.get("/api/media", async (_req, res) => {
+  app.get("/api/media", async (req, res) => {
     try {
       const media = await storage.getAllMedia();
-      res.json(media);
+      const resolved = media.map((item) => ({
+        ...item,
+        url: resolvePublicUrl(req, item.url),
+      }));
+      res.json(resolved);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -860,7 +1208,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!media) {
         return res.status(404).json({ error: "Media not found" });
       }
-      res.json(media);
+      res.json({
+        ...media,
+        url: resolvePublicUrl(req, media.url),
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -936,7 +1287,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           options: row.optionsJson ? JSON.parse(row.optionsJson) : [],
           correctAnswers: row.answerKey ? JSON.parse(row.answerKey) : [],
           explanation: row.explain ?? null,
-          mediaUrl: row.mediaUrl ?? null,
+          mediaUrl: resolvePublicUrl(req, row.mediaUrl ?? null),
           points: 1,
           tags: [],
         },
@@ -1321,7 +1672,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         url = getR2PublicUrl(r2Key);
       } else {
-        url = `/uploads/${filename}`;
+        url = resolvePublicUrl(req, `/uploads/${filename}`);
       }
 
       if (process.env.DATABASE_URL) {

@@ -13,7 +13,7 @@ interface AuthContextType {
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<User | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -35,19 +35,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         credentials: "include",
       });
 
-      if (response.ok) {
-        const userData = await response.json();
-        if (requestId !== authRequestId.current) return;
-        setUser(userData);
-      } else {
-        if (requestId !== authRequestId.current) return;
+      if (requestId !== authRequestId.current) return null;
+
+      if (!response.ok) {
         setUser(null);
+        return null;
       }
+
+      const userData = await response.json();
+      setUser(userData);
+      return userData;
     } catch (error) {
-      if (requestId !== authRequestId.current) return;
+      if (requestId !== authRequestId.current) return null;
       setUser(null);
+      return null;
     } finally {
-      setLoading(false);
+      if (requestId === authRequestId.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -66,9 +71,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(error.error || "Login failed");
     }
 
-    const userData = await response.json();
-    authRequestId.current += 1;
-    setUser(userData);
+    await response.json(); // consume payload so the cookie can be set
+    const userData = await checkAuth();
+    if (!userData) {
+      throw new Error("Unable to verify login. Please try again.");
+    }
 
     if (userData.role === "admin") {
       setLocation("/admin");

@@ -3,7 +3,7 @@ import { Switch, Route, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, TrendingUp, Layers, ClipboardList, Lightbulb, Users, Pencil, Image } from "lucide-react";
+import { Sparkles, TrendingUp, Layers, ClipboardList, Lightbulb, Users, Pencil, Image, BookOpen, Library } from "lucide-react";
 import { AdminShell, type AdminNavItem } from "@/layouts/AdminShell";
 
 const OverviewPage = lazy(() => import("@/features/overview/pages/OverviewPage"));
@@ -12,12 +12,14 @@ const QuestionsPage = lazy(() => import("@/features/questions/pages/QuestionsPag
 const TemplatesPage = lazy(() => import("@/features/templates/pages/TemplatesPage"));
 const GradingPage = lazy(() => import("@/features/grading/pages/GradingPage"));
 const TipsPage = lazy(() => import("@/features/tips/pages/TipsPage"));
+const LessonsPage = lazy(() => import("@/features/lessons/pages/LessonsPage"));
+const CoursesPage = lazy(() => import("@/features/courses/pages/CoursesPage"));
 const MediaPage = lazy(() => import("@/features/media/pages/MediaPage"));
 const UsersPage = lazy(() => import("@/features/users/pages/UsersPage"));
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
   const [location, setLocation] = useLocation();
-  const { data: stats } = useQuery<{ setsCount: number; questionsCount: number }>({
+  const { data: stats } = useQuery<{ setsCount: number; questionsCount: number; lessonsCount: number }>({
     queryKey: ["/api/stats"],
   });
 
@@ -76,6 +78,23 @@ export default function AdminDashboard() {
         testId: "nav-tips",
       },
       {
+        label: "Lessons",
+        href: "/admin/lessons",
+        icon: BookOpen,
+        testId: "nav-lessons",
+        badge: (
+          <Badge className="bg-gray-800 text-gray-200 text-xs">
+            {stats?.lessonsCount ?? 0}
+          </Badge>
+        ),
+      },
+      {
+        label: "Courses",
+        href: "/admin/courses",
+        icon: Library,
+        testId: "nav-courses",
+      },
+      {
         label: "Media",
         href: "/admin/media",
         icon: Image,
@@ -88,7 +107,7 @@ export default function AdminDashboard() {
         testId: "nav-users",
       },
     ],
-    [stats?.questionsCount, stats?.setsCount],
+    [stats?.questionsCount, stats?.setsCount, stats?.lessonsCount],
   );
 
   return (
@@ -112,6 +131,12 @@ export default function AdminDashboard() {
         </Route>
         <Route path="/admin/tips">
           <TipsPage />
+        </Route>
+        <Route path="/admin/lessons">
+          <LessonsPage />
+        </Route>
+        <Route path="/admin/courses">
+          <CoursesPage />
         </Route>
         <Route path="/admin/media">
           <MediaPage />

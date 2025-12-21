@@ -20,6 +20,7 @@ IF OBJECT_ID('dbo.aptis_sets','U') IS NOT NULL DROP TABLE dbo.aptis_sets;
 IF OBJECT_ID('dbo.aptis_rubrics','U') IS NOT NULL DROP TABLE dbo.aptis_rubrics;
 IF OBJECT_ID('dbo.aptis_media','U') IS NOT NULL DROP TABLE dbo.aptis_media;
 IF OBJECT_ID('dbo.aptis_tips','U') IS NOT NULL DROP TABLE dbo.aptis_tips;
+IF OBJECT_ID('dbo.aptis_lessons','U') IS NOT NULL DROP TABLE dbo.aptis_lessons;
 IF OBJECT_ID('dbo.aptis_notifications','U') IS NOT NULL DROP TABLE dbo.aptis_notifications;
 IF OBJECT_ID('dbo.aptis_settings','U') IS NOT NULL DROP TABLE dbo.aptis_settings;
 IF OBJECT_ID('dbo.aptis_class_members','U') IS NOT NULL DROP TABLE dbo.aptis_class_members;
@@ -101,6 +102,34 @@ CREATE TABLE dbo.aptis_tips (
 );
 GO
 
+/* ========== LESSONS (lesson content) ========== */
+CREATE TABLE dbo.aptis_lessons (
+  id        INT IDENTITY(1,1) PRIMARY KEY,
+  title     NVARCHAR(255) NOT NULL,
+  [description] NVARCHAR(1000) NULL,
+  skill     NVARCHAR(50)  NOT NULL, -- Reading/Listening/Writing/Speaking/GrammarVocabulary/General
+  content   NVARCHAR(MAX) NOT NULL,
+  outcomesJson NVARCHAR(MAX) NULL,
+  keyPointsJson NVARCHAR(MAX) NULL,
+  practicePromptsJson NVARCHAR(MAX) NULL,
+  [status]  NVARCHAR(20)  NOT NULL DEFAULT N'draft', -- published/draft
+  testSetId INT           NULL,
+  courseId  INT           NULL,
+  durationMinutes INT     NULL,
+  orderIndex INT          NULL,
+  coverImageUrl NVARCHAR(1000) NULL,
+  youtubeUrl NVARCHAR(1000) NULL,
+  authorId  INT           NULL,
+  createdAt DATETIME2(3)  NOT NULL DEFAULT SYSUTCDATETIME(),
+  updatedAt DATETIME2(3)  NULL,
+  CONSTRAINT CK_lessons_skill CHECK (skill IN (N'Reading',N'Listening',N'Writing',N'Speaking',N'GrammarVocabulary',N'General')),
+  CONSTRAINT CK_lessons_status CHECK ([status] IN (N'published',N'draft')),
+  CONSTRAINT FK_lessons_set FOREIGN KEY (testSetId) REFERENCES dbo.aptis_sets(id) ON DELETE NO ACTION,
+  CONSTRAINT FK_lessons_course FOREIGN KEY (courseId) REFERENCES dbo.aptis_classes(id) ON DELETE NO ACTION,
+  CONSTRAINT FK_lessons_author FOREIGN KEY (authorId) REFERENCES dbo.aptis_users(id) ON DELETE NO ACTION
+);
+GO
+
 /* ========== NOTIFICATIONS (thông báo) ========== */
 CREATE TABLE dbo.aptis_notifications (
   id        BIGINT IDENTITY(1,1) PRIMARY KEY,
@@ -120,8 +149,11 @@ CREATE TABLE dbo.aptis_classes (
   id        INT IDENTITY(1,1) PRIMARY KEY,
   code      NVARCHAR(50) NOT NULL UNIQUE,
   name      NVARCHAR(255) NOT NULL,
+  [description] NVARCHAR(1000) NULL,
+  [status]  NVARCHAR(20) NOT NULL DEFAULT N'open', -- open/closed
   createdBy INT NULL,
   createdAt DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME(),
+  CONSTRAINT CK_classes_status CHECK ([status] IN (N'open', N'closed')),
   CONSTRAINT FK_classes_creator FOREIGN KEY (createdBy) REFERENCES dbo.aptis_users(id) ON DELETE NO ACTION
 );
 GO
@@ -131,8 +163,10 @@ CREATE TABLE dbo.aptis_class_members (
   classId   INT NOT NULL,
   userId    INT NOT NULL,
   roleInClass NVARCHAR(20) NOT NULL DEFAULT N'student',
+  [status]  NVARCHAR(20) NOT NULL DEFAULT N'pending', -- pending/approved/rejected
   joinedAt  DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME(),
   CONSTRAINT UQ_class_member UNIQUE (classId, userId),
+  CONSTRAINT CK_class_members_status CHECK ([status] IN (N'pending', N'approved', N'rejected')),
   CONSTRAINT FK_class_members_class FOREIGN KEY (classId) REFERENCES dbo.aptis_classes(id) ON DELETE CASCADE,
   CONSTRAINT FK_class_members_user FOREIGN KEY (userId) REFERENCES dbo.aptis_users(id) ON DELETE NO ACTION
 );

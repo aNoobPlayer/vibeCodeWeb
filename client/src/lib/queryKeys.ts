@@ -11,6 +11,10 @@ export const queryKeys = {
   ) => (filters && Object.keys(filters).length ? ["/api/questions", filters] as const : ["/api/questions"] as const),
   tips: (filters?: MaybeFilters<{ skill: string; status: string; search: string }>) =>
     filters && Object.keys(filters).length ? ["/api/tips", filters] as const : ["/api/tips"] as const,
+  lessons: (filters?: MaybeFilters<{ skill: string; status: string; search: string }>) =>
+    filters && Object.keys(filters).length ? ["/api/lessons", filters] as const : ["/api/lessons"] as const,
+  courses: () => ["/api/courses"] as const,
+  adminCourses: () => ["/api/admin/courses"] as const,
   media: (filters?: MaybeFilters<{ type: string; search: string }>) =>
     filters && Object.keys(filters).length ? ["/api/media", filters] as const : ["/api/media"] as const,
   adminUsers: () => ["/api/admin/users"] as const,

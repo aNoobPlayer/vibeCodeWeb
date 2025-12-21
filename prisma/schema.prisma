@@ -25,6 +25,9 @@ model User {
   aptis_submissions    aptis_submissions[]
   aptis_test_results   aptis_test_results[]
   tips                 Tip[]
+  lessons              Lesson[]
+  courseMemberships    CourseMember[]
+  createdCourses       Course[]               @relation("CourseCreator")
   aptis_user_progress  aptis_user_progress[]
 
   @@map("aptis_users")
@@ -84,6 +87,61 @@ model Tip {
   author    User?     @relation(fields: [authorId], references: [id], onDelete: NoAction)
 
   @@map("aptis_tips")
+}
+
+model Lesson {
+  id              Int       @id @default(autoincrement())
+  title           String    @db.NVarChar(255)
+  description     String?   @db.NVarChar(1000)
+  skill           String    @db.NVarChar(50)
+  content         String    @db.NVarChar(Max)
+  outcomesJson    String?   @db.NVarChar(Max)
+  keyPointsJson   String?   @db.NVarChar(Max)
+  practicePromptsJson String? @db.NVarChar(Max)
+  status          String    @default("draft") @db.NVarChar(20)
+  testSetId       Int?
+  courseId        Int?
+  durationMinutes Int?
+  orderIndex      Int?
+  coverImageUrl   String?   @db.NVarChar(1000)
+  youtubeUrl      String?   @db.NVarChar(1000)
+  authorId        Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime?
+  course          Course?   @relation("CourseLessons", fields: [courseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  author          User?     @relation(fields: [authorId], references: [id], onDelete: NoAction)
+  testSet         aptis_sets? @relation(fields: [testSetId], references: [id], onDelete: NoAction)
+
+  @@map("aptis_lessons")
+}
+
+model Course {
+  id          Int            @id @default(autoincrement())
+  code        String         @unique @db.NVarChar(50)
+  name        String         @db.NVarChar(255)
+  description String?        @db.NVarChar(1000)
+  status      String         @default("open") @db.NVarChar(20)
+  createdBy   Int?
+  createdAt   DateTime       @default(now())
+  members     CourseMember[]
+  lessons     Lesson[]       @relation("CourseLessons")
+  creator     User?          @relation("CourseCreator", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("aptis_classes")
+}
+
+model CourseMember {
+  id          Int      @id @default(autoincrement())
+  classId     Int
+  userId      Int
+  roleInClass String   @default("student") @db.NVarChar(20)
+  status      String   @default("pending") @db.NVarChar(20)
+  joinedAt    DateTime @default(now())
+  course      Course   @relation(fields: [classId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user        User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([classId, userId], map: "UQ_class_member")
+  @@map("aptis_class_members")
 }
 
 model aptis_answers {
@@ -181,6 +239,7 @@ model aptis_sets {
   aptis_submissions   aptis_submissions[]
   aptis_test_results  aptis_test_results[]
   aptis_user_progress aptis_user_progress[]
+  lessons             Lesson[]
 }
 
 model aptis_submissions {

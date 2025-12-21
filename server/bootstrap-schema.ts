@@ -154,6 +154,129 @@ const tables: TableDefinition[] = [
     `,
   },
   {
+    name: "aptis_lessons",
+    createSql: `
+      IF OBJECT_ID('dbo.aptis_lessons', 'U') IS NULL
+      BEGIN
+        CREATE TABLE dbo.aptis_lessons (
+          id        INT IDENTITY(1,1) PRIMARY KEY,
+          title     NVARCHAR(255) NOT NULL,
+          [description] NVARCHAR(1000) NULL,
+          skill     NVARCHAR(50)  NOT NULL,
+          content   NVARCHAR(MAX) NOT NULL,
+          outcomesJson NVARCHAR(MAX) NULL,
+          keyPointsJson NVARCHAR(MAX) NULL,
+          practicePromptsJson NVARCHAR(MAX) NULL,
+          [status]  NVARCHAR(20)  NOT NULL DEFAULT N'draft',
+          testSetId INT           NULL,
+          courseId  INT           NULL,
+          durationMinutes INT     NULL,
+          orderIndex INT          NULL,
+          coverImageUrl NVARCHAR(1000) NULL,
+          youtubeUrl NVARCHAR(1000) NULL,
+          authorId  INT           NULL,
+          createdAt DATETIME2(3)  NOT NULL DEFAULT SYSUTCDATETIME(),
+          updatedAt DATETIME2(3)  NULL,
+          CONSTRAINT CK_lessons_skill CHECK (skill IN (N'Reading',N'Listening',N'Writing',N'Speaking',N'GrammarVocabulary',N'General')),
+          CONSTRAINT CK_lessons_status CHECK ([status] IN (N'published',N'draft')),
+          CONSTRAINT FK_lessons_set FOREIGN KEY (testSetId) REFERENCES dbo.aptis_sets(id) ON DELETE NO ACTION,
+          CONSTRAINT FK_lessons_course FOREIGN KEY (courseId) REFERENCES dbo.aptis_classes(id) ON DELETE NO ACTION,
+          CONSTRAINT FK_lessons_author FOREIGN KEY (authorId) REFERENCES dbo.aptis_users(id) ON DELETE NO ACTION
+        );
+      END
+    `,
+  },
+  {
+    name: "aptis_classes",
+    createSql: `
+      IF OBJECT_ID('dbo.aptis_classes', 'U') IS NULL
+      BEGIN
+        CREATE TABLE dbo.aptis_classes (
+          id        INT IDENTITY(1,1) PRIMARY KEY,
+          code      NVARCHAR(50) NOT NULL UNIQUE,
+          name      NVARCHAR(255) NOT NULL,
+          [description] NVARCHAR(1000) NULL,
+          [status]  NVARCHAR(20) NOT NULL DEFAULT N'open',
+          createdBy INT NULL,
+          createdAt DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME(),
+          CONSTRAINT CK_classes_status CHECK ([status] IN (N'open', N'closed')),
+          CONSTRAINT FK_classes_creator FOREIGN KEY (createdBy) REFERENCES dbo.aptis_users(id) ON DELETE NO ACTION
+        );
+      END
+    `,
+  },
+  {
+    name: "aptis_class_members",
+    createSql: `
+      IF OBJECT_ID('dbo.aptis_class_members', 'U') IS NULL
+      BEGIN
+        CREATE TABLE dbo.aptis_class_members (
+          id        INT IDENTITY(1,1) PRIMARY KEY,
+          classId   INT NOT NULL,
+          userId    INT NOT NULL,
+          roleInClass NVARCHAR(20) NOT NULL DEFAULT N'student',
+          [status]  NVARCHAR(20) NOT NULL DEFAULT N'pending',
+          joinedAt  DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME(),
+          CONSTRAINT UQ_class_member UNIQUE (classId, userId),
+          CONSTRAINT CK_class_members_status CHECK ([status] IN (N'pending', N'approved', N'rejected')),
+          CONSTRAINT FK_class_members_class FOREIGN KEY (classId) REFERENCES dbo.aptis_classes(id) ON DELETE CASCADE,
+          CONSTRAINT FK_class_members_user FOREIGN KEY (userId) REFERENCES dbo.aptis_users(id) ON DELETE NO ACTION
+        );
+      END
+    `,
+  },
+  {
+    name: "aptis_lessons_columns",
+    createSql: `
+      IF OBJECT_ID('dbo.aptis_lessons', 'U') IS NOT NULL AND COL_LENGTH('dbo.aptis_lessons', 'outcomesJson') IS NULL
+      BEGIN
+        ALTER TABLE dbo.aptis_lessons ADD outcomesJson NVARCHAR(MAX) NULL;
+      END
+      IF OBJECT_ID('dbo.aptis_lessons', 'U') IS NOT NULL AND COL_LENGTH('dbo.aptis_lessons', 'keyPointsJson') IS NULL
+      BEGIN
+        ALTER TABLE dbo.aptis_lessons ADD keyPointsJson NVARCHAR(MAX) NULL;
+      END
+      IF OBJECT_ID('dbo.aptis_lessons', 'U') IS NOT NULL AND COL_LENGTH('dbo.aptis_lessons', 'practicePromptsJson') IS NULL
+      BEGIN
+        ALTER TABLE dbo.aptis_lessons ADD practicePromptsJson NVARCHAR(MAX) NULL;
+      END
+      IF OBJECT_ID('dbo.aptis_lessons', 'U') IS NOT NULL AND COL_LENGTH('dbo.aptis_lessons', 'testSetId') IS NULL
+      BEGIN
+        ALTER TABLE dbo.aptis_lessons ADD testSetId INT NULL;
+      END
+      IF OBJECT_ID('dbo.aptis_lessons', 'U') IS NOT NULL AND COL_LENGTH('dbo.aptis_lessons', 'youtubeUrl') IS NULL
+      BEGIN
+        ALTER TABLE dbo.aptis_lessons ADD youtubeUrl NVARCHAR(1000) NULL;
+      END
+      IF OBJECT_ID('dbo.aptis_lessons', 'U') IS NOT NULL AND COL_LENGTH('dbo.aptis_lessons', 'courseId') IS NULL
+      BEGIN
+        ALTER TABLE dbo.aptis_lessons ADD courseId INT NULL;
+      END
+    `,
+  },
+  {
+    name: "aptis_classes_columns",
+    createSql: `
+      IF OBJECT_ID('dbo.aptis_classes', 'U') IS NOT NULL AND COL_LENGTH('dbo.aptis_classes', 'description') IS NULL
+      BEGIN
+        ALTER TABLE dbo.aptis_classes ADD [description] NVARCHAR(1000) NULL;
+      END
+      IF OBJECT_ID('dbo.aptis_classes', 'U') IS NOT NULL AND COL_LENGTH('dbo.aptis_classes', 'status') IS NULL
+      BEGIN
+        ALTER TABLE dbo.aptis_classes ADD [status] NVARCHAR(20) NOT NULL CONSTRAINT DF_aptis_classes_status DEFAULT N'open';
+      END
+    `,
+  },
+  {
+    name: "aptis_class_members_columns",
+    createSql: `
+      IF OBJECT_ID('dbo.aptis_class_members', 'U') IS NOT NULL AND COL_LENGTH('dbo.aptis_class_members', 'status') IS NULL
+      BEGIN
+        ALTER TABLE dbo.aptis_class_members ADD [status] NVARCHAR(20) NOT NULL CONSTRAINT DF_aptis_class_members_status DEFAULT N'pending';
+      END
+    `,
+  },
+  {
     name: "aptis_questions",
     createSql: `
       IF OBJECT_ID('dbo.aptis_questions', 'U') IS NULL

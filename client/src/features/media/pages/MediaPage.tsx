@@ -34,8 +34,8 @@ export default function MediaPage() {
           </div>
         </div>
         <p className="text-xs text-muted-foreground mb-4">
-          Files are stored under <code>/uploads</code> and automatically recorded in SQL when <code>DATABASE_URL</code>{" "}
-          is configured on the server.
+          Files are stored under the configured upload base and recorded in SQL when <code>DATABASE_URL</code> is
+          configured on the server.
         </p>
 
         {!mediaFiles || mediaFiles.length === 0 ? (
@@ -66,7 +66,13 @@ export default function MediaPage() {
                   {new Date(media.uploadedAt).toLocaleDateString("vi-VN")}
                 </p>
                 <div className="flex gap-2 mt-3">
-                  <Button variant="ghost" size="sm" className="flex-1" data-testid={`button-view-media-${media.id}`}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex-1"
+                    data-testid={`button-view-media-${media.id}`}
+                    onClick={() => window.open(media.url, "_blank", "noopener,noreferrer")}
+                  >
                     <Eye className="w-3 h-3" />
                   </Button>
                   <Button

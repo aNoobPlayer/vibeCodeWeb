@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card } from "@/components/ui/card";
@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,8 +38,9 @@ import {
   Clock3,
   Sparkles,
 } from "lucide-react";
-import type { Activity, TestSet, Tip } from "@shared/schema";
+import type { Activity, Lesson, TestSet, Tip } from "@shared/schema";
 import { useLocation } from "wouter";
+import { getYouTubeEmbedUrl } from "@/lib/youtube";
 
 export default function StudentDashboard() {
   const [currentPage, setCurrentPage] = useState("practice");
@@ -65,7 +67,13 @@ export default function StudentDashboard() {
           <div className="bg-gradient-to-br from-white/20 to-white/10 backdrop-blur-xl border border-white/30 rounded-2xl p-4 mb-10 shadow-2xl">
             <div className="text-sm text-white/90 mb-1">Trang hiện tại</div>
             <div className="font-semibold text-lg">
-              {currentPage === "practice" ? "Luyện tập" : currentPage === "tips" ? "Mẹo học" : "Thống kê"}
+              {currentPage === "practice"
+                ? "Luyện tập"
+                : currentPage === "lessons"
+                    ? "Lessons"
+                    : currentPage === "tips"
+                      ? "Mẹo học"
+                      : "Thống kê"}
             </div>
           </div>
 
@@ -85,6 +93,19 @@ export default function StudentDashboard() {
               }`}
             >
               <span className="font-medium">Luyện tập</span>
+              <span className="text-lg">→</span>
+            </Button>
+                        <Button
+              variant="ghost"
+              data-testid="nav-student-lessons"
+              onClick={() => setCurrentPage("lessons")}
+              className={`w-full flex items-center justify-between px-5 py-3.5 rounded-xl transition-all duration-300 backdrop-blur-md ${
+                currentPage === "lessons"
+                  ? "bg-white/15 shadow-lg"
+                  : "hover:bg-white/10 hover:translate-x-2"
+              }`}
+            >
+              <span className="font-medium">Lessons</span>
               <span className="text-lg">→</span>
             </Button>
             <Button
@@ -197,6 +218,7 @@ export default function StudentDashboard() {
           {/* Content */}
           <div className="p-8">
             {currentPage === "practice" && <PracticePage searchQuery={searchQuery} />}
+                        {currentPage === "lessons" && <LessonsPage searchQuery={searchQuery} />}
             {currentPage === "tips" && <TipsPage searchQuery={searchQuery} />}
             {currentPage === "progress" && <ProgressPage />}
           </div>
@@ -486,6 +508,423 @@ function PracticeCard({ testSet }: { testSet: TestSet }) {
         </div>
       </div>
     </button>
+  );
+}
+
+// Lessons Page Component
+function LessonsPage({ searchQuery }: { searchQuery: string }) {
+  const [filterSkill, setFilterSkill] = useState("");
+  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+  const [, setLocation] = useLocation();
+
+  const { data: lessons } = useQuery<Lesson[]>({
+    queryKey: ["/api/lessons"],
+  });
+  const { data: testSets } = useQuery<TestSet[]>({
+    queryKey: ["/api/test-sets"],
+  });
+
+  const testSetMap = useMemo(() => {
+    const map = new Map<string, string>();
+    (testSets ?? []).forEach((set) => {
+      map.set(String(set.id), set.title);
+    });
+    return map;
+  }, [testSets]);
+
+  const filteredLessons = lessons?.filter((lesson) => {
+    if (lesson.status !== "published") return false;
+    if (filterSkill && lesson.skill !== filterSkill) return false;
+    if (searchQuery && !lesson.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    return true;
+  });
+  const sortedLessons = useMemo(() => {
+    return [...(filteredLessons ?? [])].sort((a, b) => {
+      const orderA = a.orderIndex ?? Number.MAX_SAFE_INTEGER;
+      const orderB = b.orderIndex ?? Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
+  }, [filteredLessons]);
+
+  useEffect(() => {
+    if (sortedLessons.length === 0) {
+      if (selectedLesson) setSelectedLesson(null);
+      return;
+    }
+    if (!selectedLesson || !sortedLessons.some((lesson) => lesson.id === selectedLesson.id)) {
+      setSelectedLesson(sortedLessons[0]);
+    }
+  }, [sortedLessons, selectedLesson]);
+
+  const activeLesson =
+    sortedLessons.find((lesson) => lesson.id === selectedLesson?.id) ?? sortedLessons[0] ?? null;
+  const activeLessonIndex = activeLesson
+    ? sortedLessons.findIndex((lesson) => lesson.id === activeLesson.id)
+    : -1;
+  const activeLessonVideo = getYouTubeEmbedUrl(activeLesson?.youtubeUrl ?? null);
+  const activeOutcomes = (activeLesson?.outcomes ?? []).filter((item) => item && item.trim());
+  const activeKeyPoints = (activeLesson?.keyPoints ?? []).filter((item) => item && item.trim());
+  const activePractice = (activeLesson?.practicePrompts ?? []).filter((item) => item && item.trim());
+  const activeTestSetLabel = activeLesson?.testSetId
+    ? testSetMap.get(String(activeLesson.testSetId)) ?? "Practice test"
+    : null;
+  const totalDuration = useMemo(
+    () => sortedLessons.reduce((sum, lesson) => sum + (lesson.durationMinutes ?? 0), 0),
+    [sortedLessons],
+  );
+  const progressPercent =
+    sortedLessons.length > 0 && activeLessonIndex >= 0
+      ? Math.round(((activeLessonIndex + 1) / sortedLessons.length) * 100)
+      : 0;
+  const progressLabel =
+    sortedLessons.length > 0
+      ? `${Math.max(1, activeLessonIndex + 1)} / ${sortedLessons.length}`
+      : "0 / 0";
+  const totalDurationLabel = totalDuration > 0 ? `${totalDuration} min total` : "Self-paced";
+  const canGoPrev = activeLessonIndex > 0;
+  const canGoNext = activeLessonIndex >= 0 && activeLessonIndex < sortedLessons.length - 1;
+  const goPrev = () => {
+    if (!canGoPrev) return;
+    setSelectedLesson(sortedLessons[activeLessonIndex - 1]);
+  };
+  const goNext = () => {
+    if (!canGoNext) return;
+    setSelectedLesson(sortedLessons[activeLessonIndex + 1]);
+  };
+
+  const skillLabels: Record<string, string> = {
+    Reading: "Reading",
+    Listening: "Listening",
+    Speaking: "Speaking",
+    Writing: "Writing",
+    GrammarVocabulary: "Grammar & Vocabulary",
+    General: "General",
+  };
+
+  const startLessonTest = async (testSetId: string | null | undefined) => {
+    if (!testSetId) return;
+    try {
+      const res = await fetch("/api/submissions/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ setId: testSetId }),
+      });
+      if (!res.ok) {
+        const msg = await res.text();
+        throw new Error(msg || "Failed to start submission");
+      }
+      const data = await res.json();
+      const submissionId = data.id;
+      setLocation(`/student/test/${testSetId}/${submissionId}`);
+    } catch (error) {
+      console.error(error);
+      alert("Cannot start test. Please login or try again.");
+    }
+  };
+
+  return (
+    <div className="space-y-8 animate-fadeIn">
+      <div className="relative overflow-hidden rounded-3xl border border-white/60 bg-white/70 p-6 shadow-xl backdrop-blur-xl">
+        <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
+        <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-accent/10 blur-3xl" />
+        <div className="relative space-y-5">
+          <div className="flex flex-wrap items-start justify-between gap-5">
+            <div>
+              <p className="text-xs uppercase tracking-[0.35em] text-gray-400">Online course</p>
+              <h1 className="text-4xl font-bold text-gray-900 mt-2">APTIS Learning Path</h1>
+              <p className="mt-2 text-gray-600 text-sm md:text-base">
+                Follow a step-by-step curriculum with video lessons, guided notes, and practice tasks.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full bg-white/90 px-3 py-1 text-gray-600 shadow-sm">
+                {sortedLessons.length} lessons
+              </span>
+              <span className="rounded-full bg-white/90 px-3 py-1 text-gray-600 shadow-sm">
+                {totalDurationLabel}
+              </span>
+              <span className="rounded-full bg-white/90 px-3 py-1 text-gray-600 shadow-sm">
+                {filterSkill ? skillLabels[filterSkill] ?? filterSkill : "All skills"}
+              </span>
+            </div>
+          </div>
+          <div>
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span>Course progress</span>
+              <span>{progressLabel}</span>
+            </div>
+            <div className="mt-2 h-2 rounded-full bg-gray-200/80 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-primary via-accent to-warning"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex gap-3 justify-center flex-wrap">
+        <button
+          data-testid="filter-lesson-all"
+          onClick={() => setFilterSkill("")}
+          className={`px-5 py-2 rounded-full font-medium transition-all ${
+            filterSkill === ""
+              ? "bg-gradient-to-r from-primary to-accent text-white shadow-md"
+              : "bg-white/60 text-gray-700 hover:bg-white/80"
+          }`}
+        >
+          All skills
+        </button>
+        {["Reading", "Listening", "Speaking", "Writing", "GrammarVocabulary", "General"].map((skill) => (
+          <button
+            key={skill}
+            data-testid={`filter-lesson-${skill.toLowerCase()}`}
+            onClick={() => setFilterSkill(skill)}
+            className={`px-5 py-2 rounded-full font-medium transition-all ${
+              filterSkill === skill
+                ? "bg-gradient-to-r from-primary to-accent text-white shadow-md"
+                : "bg-white/60 text-gray-700 hover:bg-white/80"
+            }`}
+          >
+            {skillLabels[skill] ?? skill}
+          </button>
+        ))}
+      </div>
+
+      {sortedLessons.length === 0 ? (
+        <div className="text-center py-20">
+          <BookOpen className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+          <p className="text-gray-500 text-lg">No lessons available yet.</p>
+        </div>
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]" data-testid="lessons-grid">
+          <div className="space-y-4">
+            <div className="rounded-3xl border border-white/60 bg-white/80 p-5 shadow-lg backdrop-blur-xl">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Course outline</p>
+                  <p className="text-lg font-semibold text-gray-900">Lessons</p>
+                </div>
+                <span className="text-xs text-gray-500">{sortedLessons.length} steps</span>
+              </div>
+              <div className="mt-4 max-h-[520px] scroll-ghost overflow-y-auto space-y-2 pr-1">
+                {sortedLessons.map((lesson, index) => {
+                  const isActive = activeLesson?.id === lesson.id;
+                  return (
+                    <button
+                      key={lesson.id}
+                      data-testid={`lesson-card-${lesson.id}`}
+                      onClick={() => setSelectedLesson(lesson)}
+                      className={`w-full rounded-2xl border px-4 py-3 text-left transition-all ${
+                        isActive
+                          ? "border-primary/30 bg-primary/10 shadow-md"
+                          : "border-white/70 bg-white/70 hover:bg-white"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={`flex h-10 w-10 items-center justify-center rounded-xl text-sm font-semibold ${
+                            isActive ? "bg-primary text-white" : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {String(index + 1).padStart(2, "0")}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-3">
+                            <p className={`text-sm font-semibold ${isActive ? "text-primary" : "text-gray-900"}`}>
+                              {lesson.title}
+                            </p>
+                            {lesson.testSetId && (
+                              <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-600">
+                                Test
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1 text-xs text-gray-500 line-clamp-2">
+                            {lesson.description || lesson.content}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-gray-500">
+                            <span className="rounded-full bg-white/80 px-2 py-0.5">
+                              {skillLabels[lesson.skill] ?? lesson.skill}
+                            </span>
+                            <span className="rounded-full bg-white/80 px-2 py-0.5">
+                              {lesson.durationMinutes ? `${lesson.durationMinutes} min` : "Self-paced"}
+                            </span>
+                          </div>
+                        </div>
+                        {isActive && (
+                          <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                            Now
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-5">
+            {activeLesson && (
+              <div className="rounded-3xl border border-white/60 bg-white/90 p-6 shadow-xl backdrop-blur-xl">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.35em] text-gray-400">Now learning</p>
+                    <h2 className="text-2xl font-semibold text-gray-900">{activeLesson.title}</h2>
+                    <p className="mt-2 text-sm text-gray-600">
+                      {activeLesson.description || "No summary yet."}
+                    </p>
+                  </div>
+                  <Badge
+                    variant="secondary"
+                    className={
+                      activeLesson.skill === "Reading"
+                        ? "bg-blue-100 text-blue-700"
+                        : activeLesson.skill === "Listening"
+                          ? "bg-cyan-100 text-cyan-700"
+                          : activeLesson.skill === "Speaking"
+                            ? "bg-green-100 text-green-700"
+                            : activeLesson.skill === "Writing"
+                              ? "bg-orange-100 text-orange-700"
+                              : "bg-gray-100 text-gray-700"
+                    }
+                  >
+                    {activeLesson.skill}
+                  </Badge>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2 text-xs text-gray-500">
+                  <span className="rounded-full bg-gray-100 px-2 py-1">
+                    Lesson {progressLabel}
+                  </span>
+                  <span className="rounded-full bg-gray-100 px-2 py-1">
+                    {activeLesson.durationMinutes ? `${activeLesson.durationMinutes} min` : "Self-paced"}
+                  </span>
+                  {activeLesson.testSetId && (
+                    <span className="rounded-full bg-indigo-100 px-2 py-1 text-indigo-700">
+                      Test ready
+                    </span>
+                  )}
+                </div>
+
+                {activeLessonVideo ? (
+                  <div className="mt-5 overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
+                    <div className="relative w-full pt-[56.25%]">
+                      <iframe
+                        src={activeLessonVideo}
+                        title={`${activeLesson.title} video`}
+                        className="absolute inset-0 h-full w-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    </div>
+                  </div>
+                ) : activeLesson.coverImageUrl ? (
+                  <div className="mt-5 overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
+                    <img
+                      src={activeLesson.coverImageUrl}
+                      alt={activeLesson.title}
+                      className="h-56 w-full object-cover"
+                    />
+                  </div>
+                ) : null}
+
+                <div className="mt-6 grid gap-4 md:grid-cols-3">
+                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Objectives
+                    </p>
+                    {activeOutcomes.length > 0 ? (
+                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
+                        {activeOutcomes.map((item, index) => (
+                          <li key={`lesson-outcome-${index}`}>{item}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-2 text-xs text-gray-400">No objectives yet.</p>
+                    )}
+                  </div>
+                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Key takeaways
+                    </p>
+                    {activeKeyPoints.length > 0 ? (
+                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
+                        {activeKeyPoints.map((item, index) => (
+                          <li key={`lesson-key-${index}`}>{item}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-2 text-xs text-gray-400">Add takeaways to guide review.</p>
+                    )}
+                  </div>
+                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Practice tasks
+                    </p>
+                    {activePractice.length > 0 ? (
+                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
+                        {activePractice.map((item, index) => (
+                          <li key={`lesson-practice-${index}`}>{item}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-2 text-xs text-gray-400">No practice tasks yet.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-6">
+                  <p className="text-sm font-semibold text-gray-900">Lesson content</p>
+                  <p className="mt-3 whitespace-pre-wrap text-gray-800 leading-relaxed">
+                    {activeLesson.content}
+                  </p>
+                </div>
+
+                {activeTestSetLabel && (
+                  <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-gray-400">Attached test</p>
+                      <p className="text-sm font-semibold text-gray-900">{activeTestSetLabel}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => startLessonTest(activeLesson.testSetId)}
+                      data-testid={`button-start-lesson-test-${activeLesson.id}`}
+                    >
+                      Start test
+                    </Button>
+                  </div>
+                )}
+
+                <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Button type="button" variant="outline" onClick={goPrev} disabled={!canGoPrev}>
+                      Previous lesson
+                    </Button>
+                    <Button type="button" onClick={goNext} disabled={!canGoNext}>
+                      Next lesson
+                    </Button>
+                  </div>
+                  {activeLesson.testSetId && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => startLessonTest(activeLesson.testSetId)}
+                      data-testid={`button-take-test-${activeLesson.id}`}
+                    >
+                      Take test now
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
