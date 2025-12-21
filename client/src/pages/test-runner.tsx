@@ -78,6 +78,7 @@ export default function TestRunner() {
   const [saving, setSaving] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [answeredMap, setAnsweredMap] = useState<Record<string, boolean>>({});
+  const [savedAnswerMap, setSavedAnswerMap] = useState<Record<string, any>>({});
   const [lastAnswerResult, setLastAnswerResult] = useState<
     (AnswerResult & { questionId: string; savedAt: number }) | null
   >(null);
@@ -226,6 +227,7 @@ export default function TestRunner() {
         ...prev,
         [questionId]: true,
       }));
+      setSavedAnswerMap((prev) => ({ ...prev, [questionId]: answer }));
       setLastAnswerResult({
         ...result,
         questionId,
@@ -245,6 +247,35 @@ export default function TestRunner() {
       });
     }
   }
+
+  // Load saved answer for the current question when submissionId or index changes
+  useEffect(() => {
+    let cancelled = false;
+    async function loadSaved() {
+      if (!submissionId || !current) return;
+      try {
+        const res = await fetch(`/api/submissions/${submissionId}/answers/${current.question.id}`, { credentials: "include" });
+        if (!res.ok) {
+          // ignore not found
+          if (res.status === 404) return;
+          throw new Error(await res.text());
+        }
+        const data = await res.json();
+        if (!cancelled) {
+          setSavedAnswerMap((prev) => ({ ...prev, [current.question.id]: data.answerData }));
+          if (data.isCorrect !== undefined && data.isCorrect !== null) {
+            setAnsweredMap((prev) => ({ ...prev, [current.question.id]: true }));
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    loadSaved();
+    return () => {
+      cancelled = true;
+    };
+  }, [submissionId, current?.question.id]);
 
   async function submitAll() {
     if (!submissionId) return;
@@ -546,6 +577,7 @@ export default function TestRunner() {
               key={current.question.id}
               type={current.question.type}
               options={current.question.options}
+              initialValue={savedAnswerMap[current.question.id]}
               onSave={(value) => handleAnswerSubmit(value, current.question.id)}
               saving={saving}
               disabled={submitted || paused}
@@ -671,21 +703,31 @@ function QuestionAnswer({
   type,
   options = [],
   onSave,
+  initialValue,
   saving,
   disabled,
 }: {
   type: string;
   options: string[];
   onSave: (ans: any) => Promise<void>;
+  initialValue?: any;
   saving: boolean;
   disabled: boolean;
 }) {
   const normalizedType = (type || "").toLowerCase();
-  const [value, setValue] = useState<string | string[]>(normalizedType === "mcq_multi" ? [] : "");
+  const [value, setValue] = useState<string | string[]>(() => {
+    if (initialValue !== undefined && initialValue !== null) return initialValue;
+    return normalizedType === "mcq_multi" ? [] : "";
+  });
 
   useEffect(() => {
-    setValue(normalizedType === "mcq_multi" ? [] : "");
-  }, [normalizedType]);
+    // reset baseline when type changes
+    if (initialValue !== undefined) {
+      setValue(initialValue);
+    } else {
+      setValue(normalizedType === "mcq_multi" ? [] : "");
+    }
+  }, [normalizedType, initialValue]);
 
   if (normalizedType === "mcq_single") {
     const singleValue = typeof value === "string" ? value : "";
