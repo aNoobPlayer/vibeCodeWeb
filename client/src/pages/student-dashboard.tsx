@@ -758,7 +758,9 @@ function CoursesPage({
   const activeLessonIndex = activeLesson
     ? eligibleLessons.findIndex((lesson) => lesson.id === activeLesson.id)
     : -1;
-  const activeLessonVideo = getYouTubeEmbedUrl(activeLesson?.youtubeUrl ?? null);
+  const activeLessonVideoEmbed = getYouTubeEmbedUrl(activeLesson?.youtubeUrl ?? null);
+  const activeLessonVideoUrl =
+    activeLesson?.youtubeUrl && !activeLessonVideoEmbed ? activeLesson.youtubeUrl : null;
   const activeContentParagraphs = useMemo(() => {
     const text = activeLesson?.content ?? "";
     return text
@@ -1404,17 +1406,23 @@ function CoursesPage({
                           <Progress value={progressPercent} className="mt-2 h-2" />
                         </div>
 
-                        {activeLessonVideo ? (
+                        {activeLessonVideoEmbed ? (
                           <div className="mt-5 overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
                             <div className="relative w-full pt-[56.25%]">
                               <iframe
-                                src={activeLessonVideo}
+                                src={activeLessonVideoEmbed}
                                 title={`${activeLesson.title} video`}
                                 className="absolute inset-0 h-full w-full"
                                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                 allowFullScreen
                               />
                             </div>
+                          </div>
+                        ) : activeLessonVideoUrl ? (
+                          <div className="mt-5 overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
+                            <video className="w-full" controls src={activeLessonVideoUrl}>
+                              Your browser does not support the video element.
+                            </video>
                           </div>
                         ) : activeLesson.coverImageUrl ? (
                           <div className="mt-5 overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">

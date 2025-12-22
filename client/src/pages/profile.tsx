@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { MediaUploadButton } from "@/components/MediaUpload";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, ArrowLeft, RefreshCw, ShieldCheck, CalendarClock, UserCircle2 } from "lucide-react";
 import { useLocation } from "wouter";
@@ -198,14 +199,39 @@ export default function ProfilePage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="profile-avatar">Avatar URL</Label>
+                <Label htmlFor="profile-avatar">Avatar</Label>
                 <Input
                   id="profile-avatar"
+                  type="hidden"
                   data-testid="input-profile-avatar"
                   value={formState.avatar}
-                  onChange={(e) => setFormState((prev) => ({ ...prev, avatar: e.target.value }))}
-                  placeholder="https://example.com/avatar.png"
+                  readOnly
                 />
+                <div className="flex flex-wrap items-center gap-2">
+                  <MediaUploadButton
+                    accept="image/*"
+                    endpoint="/api/profile/avatar/upload"
+                    buttonText="Upload avatar"
+                    dialogTitle="Upload avatar"
+                    dialogDescription="Choose an image file to use as your profile photo."
+                    onUploaded={(payload) => {
+                      if (payload?.url) {
+                        setFormState((prev) => ({ ...prev, avatar: payload.url ?? "" }));
+                      }
+                    }}
+                  />
+                  {formState.avatar?.trim() ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setFormState((prev) => ({ ...prev, avatar: "" }))}
+                    >
+                      Clear
+                    </Button>
+                  ) : null}
+                </div>
+                <p className="text-xs text-gray-500">Recommended: square JPG/PNG/WebP.</p>
                 {formState.avatar?.trim() ? (
                   <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
                     <p className="text-xs uppercase tracking-wide text-gray-400 mb-2">Preview</p>
@@ -222,14 +248,6 @@ export default function ProfilePage() {
                           onClick={() => window.open(formState.avatar, "_blank", "noopener,noreferrer")}
                         >
                           Open
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setFormState((prev) => ({ ...prev, avatar: "" }))}
-                        >
-                          Clear
                         </Button>
                       </div>
                     </div>

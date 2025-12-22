@@ -1,9 +1,37 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button, type ButtonProps } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
-export function MediaUploadButton({ onUploaded }: { onUploaded?: () => void }) {
+type MediaUploadResult = {
+  id?: string;
+  url?: string;
+  type?: string;
+  filename?: string;
+  size?: number;
+};
+
+type MediaUploadButtonProps = {
+  onUploaded?: (payload?: MediaUploadResult | null) => void;
+  accept?: string;
+  endpoint?: string;
+  buttonText?: string;
+  dialogTitle?: string;
+  dialogDescription?: string;
+  buttonVariant?: ButtonProps["variant"];
+  buttonSize?: ButtonProps["size"];
+};
+
+export function MediaUploadButton({
+  onUploaded,
+  accept = "image/*,audio/*,video/*",
+  endpoint = "/api/admin/media/upload",
+  buttonText = "Upload media",
+  dialogTitle = "Upload media",
+  dialogDescription = "Choose an image, audio clip, or video to upload.",
+  buttonVariant = "secondary",
+  buttonSize = "default",
+}: MediaUploadButtonProps) {
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -47,25 +75,35 @@ export function MediaUploadButton({ onUploaded }: { onUploaded?: () => void }) {
     setError(null);
     try {
       const form = new FormData();
-      form.append('file', file);
-      const res = await fetch('/api/admin/media/upload', { method: 'POST', credentials: 'include', body: form });
+      form.append("file", file);
+      const res = await fetch(endpoint, { method: "POST", credentials: "include", body: form });
       if (!res.ok) {
         const message = await res.text().catch(() => "");
         throw new Error(message || `Upload failed (${res.status})`);
       }
-      const payload = await res.json().catch(() => ({}));
-      setUploadedUrl(payload?.url ?? null);
+      const payload: MediaUploadResult = await res.json().catch(() => ({}));
+      const nextUrl = typeof payload?.url === "string" ? payload.url : null;
+      setUploadedUrl(nextUrl);
       setFile(null);
-      onUploaded?.();
+      onUploaded?.(nextUrl ? { ...payload, url: nextUrl } : null);
     } catch (e) {
       console.error(e);
       setError(e instanceof Error ? e.message : "Upload failed");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <>
-      <Button variant="secondary" onClick={() => setOpen(true)}>Tải media</Button>
+      <Button
+        type="button"
+        variant={buttonVariant}
+        size={buttonSize}
+        onClick={() => setOpen(true)}
+      >
+        {buttonText}
+      </Button>
       <Dialog
         open={open}
         onOpenChange={(next) => {
@@ -78,13 +116,13 @@ export function MediaUploadButton({ onUploaded }: { onUploaded?: () => void }) {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Tải media</DialogTitle>
-            <DialogDescription>Chọn ảnh, audio hoặc video để tải lên.</DialogDescription>
+            <DialogTitle>{dialogTitle}</DialogTitle>
+            <DialogDescription>{dialogDescription}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <input
               type="file"
-              accept="image/*,audio/*,video/*"
+              accept={accept}
               onChange={(e) => {
                 setUploadedUrl(null);
                 setError(null);
@@ -129,8 +167,12 @@ export function MediaUploadButton({ onUploaded }: { onUploaded?: () => void }) {
             )}
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setOpen(false)}>Đóng</Button>
-            <Button onClick={handleUpload} disabled={busy || !file}>{busy ? "Đang tải..." : "Tải lên"}</Button>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Close
+            </Button>
+            <Button type="button" onClick={handleUpload} disabled={busy || !file}>
+              {busy ? "Uploading..." : "Upload"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

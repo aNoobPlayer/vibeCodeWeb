@@ -39,26 +39,67 @@ import {
 } from "@/components/ui/alert-dialog";
 import { LessonFormModal } from "@/components/LessonFormModal";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { useLessons } from "@/features/lessons/hooks/useLessons";
 import { useTestSets } from "@/features/test-sets/hooks/useTestSets";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { queryKeys } from "@/lib/queryKeys";
 import { getYouTubeEmbedUrl } from "@/lib/youtube";
-import { BookOpen, Plus, Pencil, Eye, Trash2 } from "lucide-react";
+import {
+  BookOpen,
+  Plus,
+  Pencil,
+  Eye,
+  Trash2,
+  CheckCircle2,
+  FileText,
+  AlertTriangle,
+} from "lucide-react";
+
+const getLessonDelivery = (lesson: Lesson, testRequiredForReady: boolean) => {
+  const isPublished = lesson.status === "published";
+  const isArchived = lesson.status === "archived";
+  const hasCourse = Boolean(lesson.courseId);
+  const hasTest = Boolean(lesson.testSetId);
+  const hasContent = Boolean(lesson.content && lesson.content.trim());
+  const missingCourse = !hasCourse;
+  const missingContent = !hasContent;
+  const missingTest = testRequiredForReady && !hasTest;
+  const isBlocked = false;
+  const missingSetup = missingCourse || missingContent || missingTest;
+  const isReady = !missingSetup && !isBlocked;
+  return {
+    isPublished,
+    isArchived,
+    hasCourse,
+    hasTest,
+    hasContent,
+    missingCourse,
+    missingContent,
+    missingTest,
+    missingSetup,
+    isBlocked,
+    isReady,
+  };
+};
 
 export default function LessonsPage() {
   const [filterSkill, setFilterSkill] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCourse, setFilterCourse] = useState("all");
   const [filterLevel, setFilterLevel] = useState("all");
+  const [deliveryFilter, setDeliveryFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [isLessonFormOpen, setIsLessonFormOpen] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [viewLesson, setViewLesson] = useState<Lesson | null>(null);
   const [lessonToDelete, setLessonToDelete] = useState<Lesson | null>(null);
   const { toast } = useToast();
+  const testRequiredForReady = false;
   const { testSets } = useTestSets();
-  const viewLessonVideo = getYouTubeEmbedUrl(viewLesson?.youtubeUrl ?? null);
+  const viewLessonVideoEmbed = getYouTubeEmbedUrl(viewLesson?.youtubeUrl ?? null);
+  const viewLessonVideoUrl =
+    viewLesson?.youtubeUrl && !viewLessonVideoEmbed ? viewLesson.youtubeUrl : null;
 
   const { data: courses = [] } = useQuery<Course[]>({
     queryKey: ["/api/admin/courses"],
@@ -82,6 +123,36 @@ export default function LessonsPage() {
       return true;
     });
   }, [lessons, filterSkill, filterStatus, filterCourse, filterLevel, searchQuery]);
+
+  const deliveryStats = useMemo(() => {
+    const stats = {
+      total: filteredLessons.length,
+      ready: 0,
+      missingSetup: 0,
+      published: 0,
+      draft: 0,
+    };
+    filteredLessons.forEach((lesson) => {
+      const delivery = getLessonDelivery(lesson, testRequiredForReady);
+      if (delivery.isReady) stats.ready += 1;
+      if (delivery.missingSetup && !delivery.isBlocked) stats.missingSetup += 1;
+      if (delivery.isPublished) stats.published += 1;
+      if (!delivery.isPublished && !delivery.isArchived) stats.draft += 1;
+    });
+    return stats;
+  }, [filteredLessons, testRequiredForReady]);
+
+  const deliveryFilteredLessons = useMemo(() => {
+    if (deliveryFilter === "all") return filteredLessons;
+    return filteredLessons.filter((lesson) => {
+      const delivery = getLessonDelivery(lesson, testRequiredForReady);
+      if (deliveryFilter === "ready") return delivery.isReady;
+      if (deliveryFilter === "missing") return delivery.missingSetup && !delivery.isBlocked;
+      if (deliveryFilter === "published") return delivery.isPublished;
+      if (deliveryFilter === "draft") return !delivery.isPublished && !delivery.isArchived;
+      return true;
+    });
+  }, [filteredLessons, deliveryFilter, testRequiredForReady]);
 
   const testSetMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -122,6 +193,75 @@ export default function LessonsPage() {
     if (lessonToDelete?.id) {
       deleteLesson.mutate(lessonToDelete.id);
     }
+  };
+
+  const publishLesson = useMutation({
+    mutationFn: async ({ id }: { id: string }) => {
+      return apiRequest(`/api/lessons/${id}`, "PATCH", { status: "published" });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.lessons() });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      toast({ title: "Lesson published", description: "The lesson is now visible to students." });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Unable to publish lesson",
+        description: error?.message ?? "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateLesson = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Lesson> }) => {
+      await apiRequest(`/api/lessons/${id}`, "PATCH", updates);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.lessons() });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+    },
+  });
+
+  const handleQuickUpdate = ({
+    lesson,
+    updates,
+    title,
+  }: {
+    lesson: Lesson;
+    updates: Partial<Lesson>;
+    title: string;
+  }) => {
+    const undoPayload = Object.keys(updates).reduce<Record<string, unknown>>((acc, key) => {
+      acc[key] = (lesson as Record<string, unknown>)[key] ?? null;
+      return acc;
+    }, {});
+    updateLesson.mutate(
+      { id: lesson.id, updates },
+      {
+        onSuccess: () => {
+          toast({
+            title,
+            description: "Changes saved.",
+            action: (
+              <ToastAction
+                altText="Undo"
+                onClick={() => updateLesson.mutate({ id: lesson.id, updates: undoPayload })}
+              >
+                Undo
+              </ToastAction>
+            ),
+          });
+        },
+        onError: (error: any) => {
+          toast({
+            title: "Update failed",
+            description: error?.message ?? "Please try again.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
   };
 
   const badgeClassForSkill = (skill: string) => {
@@ -182,6 +322,7 @@ export default function LessonsPage() {
                 <SelectItem value="all">All</SelectItem>
                 <SelectItem value="draft">Draft</SelectItem>
                 <SelectItem value="published">Published</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterCourse} onValueChange={setFilterCourse}>
@@ -220,6 +361,64 @@ export default function LessonsPage() {
           </div>
         </div>
 
+        <div className="grid gap-4 mb-6 md:grid-cols-4">
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <span>Total lessons</span>
+              <BookOpen className="h-4 w-4 text-slate-500" />
+            </div>
+            <p className="mt-2 text-2xl font-semibold text-gray-900">{deliveryStats.total}</p>
+            <p className="text-xs text-gray-500">All lessons in the current filters.</p>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <span>Ready</span>
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+            </div>
+            <p className="mt-2 text-2xl font-semibold text-gray-900">{deliveryStats.ready}</p>
+            <p className="text-xs text-gray-500">Course + content checklist completed.</p>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <span>Missing setup</span>
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+            </div>
+            <p className="mt-2 text-2xl font-semibold text-gray-900">{deliveryStats.missingSetup}</p>
+            <p className="text-xs text-gray-500">Needs course or content to be ready.</p>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <span>Published</span>
+              <FileText className="h-4 w-4 text-indigo-500" />
+            </div>
+            <p className="mt-2 text-2xl font-semibold text-gray-900">{deliveryStats.published}</p>
+            <p className="text-xs text-gray-500">Visible to students right now.</p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 mb-4">
+          {[
+            { key: "all", label: "All lessons", count: deliveryStats.total },
+            { key: "ready", label: "Ready", count: deliveryStats.ready },
+            { key: "missing", label: "Missing setup", count: deliveryStats.missingSetup },
+            { key: "published", label: "Published", count: deliveryStats.published },
+            { key: "draft", label: "Draft", count: deliveryStats.draft },
+          ].map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setDeliveryFilter(item.key)}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                deliveryFilter === item.key
+                  ? "bg-gray-900 text-white shadow-sm"
+                  : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-200"
+              }`}
+            >
+              {item.label} ({item.count})
+            </button>
+          ))}
+        </div>
+
         <div className="rounded-lg border border-gray-200 overflow-hidden">
           <Table>
             <TableHeader>
@@ -228,43 +427,238 @@ export default function LessonsPage() {
                 <TableHead>Title</TableHead>
                 <TableHead>Course</TableHead>
                 <TableHead>Level</TableHead>
+                <TableHead>Order</TableHead>
                 <TableHead>Skill</TableHead>
                 <TableHead>Test</TableHead>
-                <TableHead>Status</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead>Updated</TableHead>
+                <TableHead>Readiness</TableHead>
                 <TableHead className="w-48">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredLessons.length === 0 ? (
+              {deliveryFilteredLessons.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-12 text-gray-400">
+                  <TableCell colSpan={11} className="text-center py-12 text-gray-400">
                     <BookOpen className="w-10 h-10 mx-auto mb-3" />
-                    <p>No lessons found</p>
+                    <p>
+                      {filteredLessons.length === 0
+                        ? "No lessons yet."
+                        : deliveryFilter === "ready"
+                          ? "No ready lessons."
+                          : "No lessons match the current filters."}
+                    </p>
+                    {deliveryFilter !== "all" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-4"
+                        onClick={() => setDeliveryFilter("all")}
+                      >
+                        Clear delivery filter
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredLessons.map((lesson, index) => (
+                deliveryFilteredLessons.map((lesson, index) => {
+                  const delivery = getLessonDelivery(lesson, testRequiredForReady);
+                  const readinessLabel = delivery.isBlocked
+                    ? "Blocked"
+                    : delivery.isReady
+                      ? "Ready"
+                      : "Missing setup";
+                  const readinessClass = delivery.isBlocked
+                    ? "bg-rose-100 text-rose-700"
+                    : delivery.isReady
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-amber-100 text-amber-700";
+                  const lifecycleLabel = delivery.isArchived
+                    ? "Archived"
+                    : delivery.isPublished
+                      ? "Published"
+                      : "Draft";
+                  const lifecycleClass = delivery.isArchived
+                    ? "bg-slate-100 text-slate-600"
+                    : delivery.isPublished
+                      ? "bg-indigo-100 text-indigo-700"
+                      : "bg-gray-100 text-gray-700";
+                  const testPillLabel = delivery.hasTest
+                    ? "Attached"
+                    : testRequiredForReady
+                      ? "Missing"
+                      : "Optional";
+                  const testPillClass = delivery.hasTest
+                    ? "bg-indigo-50 text-indigo-700"
+                    : testRequiredForReady
+                      ? "bg-rose-50 text-rose-700"
+                      : "bg-amber-50 text-amber-700";
+                  const publishBlocked =
+                    delivery.missingSetup || delivery.isBlocked || delivery.isArchived || delivery.isPublished;
+                  const missingParts: string[] = [];
+                  if (delivery.missingCourse) missingParts.push("Course");
+                  if (delivery.missingContent) missingParts.push("Content");
+                  if (delivery.missingTest) missingParts.push("Test");
+                  const publishTooltip =
+                    missingParts.length > 0
+                      ? `Missing ${missingParts.join(", ")}`
+                      : delivery.isArchived
+                        ? "Archived lessons cannot be published"
+                        : delivery.isBlocked
+                          ? "Blocked by prerequisites"
+                          : delivery.isPublished
+                            ? "Already published"
+                            : "Publish lesson";
+                  const isPublishing =
+                    publishLesson.isPending && publishLesson.variables?.id === lesson.id;
+                  return (
                   <TableRow key={lesson.id} data-testid={`lesson-row-${lesson.id}`} className="hover:bg-gray-50">
                     <TableCell className="font-medium">{index + 1}</TableCell>
-                    <TableCell className="font-medium text-gray-900">{lesson.title}</TableCell>
-                    <TableCell className="text-sm text-gray-600">
-                      {lesson.courseId ? courseMap.get(String(lesson.courseId)) ?? "Unknown" : "Unassigned"}
+                    <TableCell>
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium text-gray-900">{lesson.title}</p>
+                          <Badge variant="secondary" className={lifecycleClass}>
+                            {lifecycleLabel}
+                          </Badge>
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+                          <span
+                            className={`rounded-full px-2 py-0.5 ${
+                              delivery.hasCourse
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-rose-50 text-rose-700"
+                            }`}
+                          >
+                            Course: {delivery.hasCourse ? "Assigned" : "Missing"}
+                          </span>
+                          <span
+                            className={`rounded-full px-2 py-0.5 ${
+                              delivery.hasContent
+                                ? "bg-blue-50 text-blue-700"
+                                : "bg-rose-50 text-rose-700"
+                            }`}
+                          >
+                            Content: {delivery.hasContent ? "Has content" : "Missing"}
+                          </span>
+                          <span className={`rounded-full px-2 py-0.5 ${testPillClass}`}>
+                            Test: {testPillLabel}
+                          </span>
+                        </div>
+                      </div>
                     </TableCell>
-                    <TableCell className="text-sm text-gray-600">Level {lesson.level ?? 1}</TableCell>
+                    <TableCell>
+                      <Select
+                        value={lesson.courseId ? String(lesson.courseId) : "none"}
+                        onValueChange={(value) => {
+                          const nextCourseId = value === "none" ? null : value;
+                          if ((lesson.courseId ?? null) === nextCourseId) return;
+                          handleQuickUpdate({
+                            lesson,
+                            updates: { courseId: nextCourseId },
+                            title: "Course updated",
+                          });
+                        }}
+                      >
+                        <SelectTrigger className="w-48">
+                          <SelectValue placeholder="Unassigned" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Unassigned</SelectItem>
+                          {courses.map((course) => (
+                            <SelectItem key={course.id} value={String(course.id)}>
+                              {course.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        key={`level-${lesson.id}-${lesson.level ?? 1}`}
+                        type="number"
+                        min={1}
+                        defaultValue={lesson.level ?? 1}
+                        className="w-20"
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.currentTarget.blur();
+                          }
+                        }}
+                        onBlur={(event) => {
+                          const raw = event.target.value.trim();
+                          const nextLevel = raw ? parseInt(raw, 10) : 1;
+                          if (!Number.isFinite(nextLevel) || nextLevel < 1) {
+                            event.target.value = String(lesson.level ?? 1);
+                            return;
+                          }
+                          if ((lesson.level ?? 1) === nextLevel) return;
+                          handleQuickUpdate({
+                            lesson,
+                            updates: { level: nextLevel },
+                            title: "Level updated",
+                          });
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        key={`order-${lesson.id}-${lesson.orderIndex ?? "none"}`}
+                        type="number"
+                        min={1}
+                        defaultValue={lesson.orderIndex ?? ""}
+                        className="w-20"
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.currentTarget.blur();
+                          }
+                        }}
+                        onBlur={(event) => {
+                          const raw = event.target.value.trim();
+                          const nextOrder = raw === "" ? null : parseInt(raw, 10);
+                          if (raw !== "" && (!Number.isFinite(nextOrder) || (nextOrder ?? 0) < 1)) {
+                            event.target.value = lesson.orderIndex ? String(lesson.orderIndex) : "";
+                            return;
+                          }
+                          if ((lesson.orderIndex ?? null) === nextOrder) return;
+                          handleQuickUpdate({
+                            lesson,
+                            updates: { orderIndex: nextOrder },
+                            title: "Order updated",
+                          });
+                        }}
+                      />
+                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className={badgeClassForSkill(lesson.skill)}>
                         {lesson.skill}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm text-gray-500">
-                      {lesson.testSetId ? testSetMap.get(String(lesson.testSetId)) ?? "Unknown" : "None"}
-                    </TableCell>
                     <TableCell>
-                      <Badge variant={lesson.status === "published" ? "default" : "secondary"}>
-                        {lesson.status === "published" ? "Published" : "Draft"}
-                      </Badge>
+                      <Select
+                        value={lesson.testSetId ? String(lesson.testSetId) : "none"}
+                        onValueChange={(value) => {
+                          const nextTestId = value === "none" ? null : value;
+                          if ((lesson.testSetId ?? null) === nextTestId) return;
+                          handleQuickUpdate({
+                            lesson,
+                            updates: { testSetId: nextTestId },
+                            title: "Test updated",
+                          });
+                        }}
+                      >
+                        <SelectTrigger className="w-48">
+                          <SelectValue placeholder="None" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No test</SelectItem>
+                          {testSets.map((set) => (
+                            <SelectItem key={set.id} value={String(set.id)}>
+                              {set.title}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     <TableCell className="text-sm text-gray-500">
                       {lesson.durationMinutes ? `${lesson.durationMinutes} min` : "Self-paced"}
@@ -273,7 +667,25 @@ export default function LessonsPage() {
                       {new Date(lesson.updatedAt ?? lesson.createdAt).toLocaleDateString("vi-VN")}
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap items-center gap-1">
+                        <Badge variant="secondary" className={readinessClass}>
+                          {readinessLabel}
+                        </Badge>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-2">
+                        {lesson.status !== "published" && lesson.status !== "archived" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={publishBlocked || isPublishing}
+                            title={publishTooltip}
+                            onClick={() => publishLesson.mutate({ id: lesson.id })}
+                          >
+                            {isPublishing ? "Publishing..." : "Publish"}
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -305,7 +717,8 @@ export default function LessonsPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
+                  );
+                })
               )}
             </TableBody>
           </Table>
@@ -355,11 +768,11 @@ export default function LessonsPage() {
             {viewLesson?.description && (
               <p className="text-sm text-gray-500">{viewLesson.description}</p>
             )}
-            {viewLessonVideo && (
+            {viewLessonVideoEmbed ? (
               <div className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
                 <div className="relative w-full pt-[56.25%]">
                   <iframe
-                    src={viewLessonVideo}
+                    src={viewLessonVideoEmbed}
                     title={`${viewLesson?.title ?? "Lesson"} video`}
                     className="absolute inset-0 h-full w-full"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -367,7 +780,13 @@ export default function LessonsPage() {
                   />
                 </div>
               </div>
-            )}
+            ) : viewLessonVideoUrl ? (
+              <div className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+                <video className="w-full" controls src={viewLessonVideoUrl}>
+                  Your browser does not support the video element.
+                </video>
+              </div>
+            ) : null}
             {viewLesson?.outcomes && viewLesson.outcomes.length > 0 && (
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Objectives</p>

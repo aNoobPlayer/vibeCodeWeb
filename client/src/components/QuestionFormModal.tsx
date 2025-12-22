@@ -11,6 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { insertQuestionSchema, type Question, type QuestionTemplate } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { MediaUploadButton } from "@/components/MediaUpload";
 import type { z } from "zod";
 import { Sparkles } from "lucide-react";
 import { useTemplates } from "@/features/templates/hooks/useTemplates";
@@ -70,6 +71,22 @@ export function QuestionFormModal({ open, onOpenChange, question }: QuestionForm
   const activeTags = Array.isArray(tagsValue)
     ? tagsValue.filter((tag): tag is string => typeof tag === "string" && tag.trim().length > 0)
     : [];
+
+  const appendMediaTypeParam = (url: string, type?: string | null) => {
+    if (!url || !type) return url;
+    try {
+      const isAbsolute = /^https?:\/\//i.test(url);
+      const base = isAbsolute ? undefined : window.location.origin;
+      const parsed = new URL(url, base);
+      parsed.searchParams.set("mediaType", type);
+      if (!isAbsolute && url.startsWith("/")) {
+        return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+      }
+      return parsed.toString();
+    } catch {
+      return url;
+    }
+  };
 
   const sanitizeTag = (value: string) => value.replace(/\s+/g, " ").trim();
   const getCurrentTags = () => {
@@ -732,16 +749,59 @@ export function QuestionFormModal({ open, onOpenChange, question }: QuestionForm
                           name="mediaUrl"
                           render={({ field }) => (
                             <FormItem className="md:col-span-2">
-                              <FormLabel>Media URL</FormLabel>
+                              <FormLabel>Media attachment</FormLabel>
                               <FormControl>
                                 <Input
+                                  type="hidden"
                                   data-testid="input-question-media-url"
-                                  placeholder="https://cdn.example.com/audio/airport.mp3"
                                   {...field}
                                   value={field.value ?? ""}
+                                  readOnly
                                 />
                               </FormControl>
-                              <p className="text-xs text-gray-500">Link an audio clip or reference image. Students will access it directly.</p>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <MediaUploadButton
+                                  accept="image/*,audio/*"
+                                  buttonText="Upload media"
+                                  dialogTitle="Upload media"
+                                  dialogDescription="Choose an image or audio clip to attach to this question."
+                                  onUploaded={(payload) => {
+                                    if (payload?.url) {
+                                      const nextUrl = appendMediaTypeParam(payload.url, payload.type);
+                                      field.onChange(nextUrl);
+                                    }
+                                  }}
+                                />
+                                {field.value ? (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => field.onChange("")}
+                                  >
+                                    Clear
+                                  </Button>
+                                ) : null}
+                              </div>
+                              <p className="text-xs text-gray-500">
+                                Upload an image or audio clip so students can reference it directly.
+                              </p>
+                              {field.value ? (
+                                <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
+                                  <p className="text-xs uppercase tracking-wide text-gray-400 mb-2">Current media</p>
+                                  <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => window.open(field.value, "_blank", "noopener,noreferrer")}
+                                    >
+                                      Open
+                                    </Button>
+                                    <span className="break-all">{field.value}</span>
+                                  </div>
+                                </div>
+                              ) : null}
                               <FormMessage />
                             </FormItem>
                           )}
@@ -766,6 +826,11 @@ export function QuestionFormModal({ open, onOpenChange, question }: QuestionForm
                                   body: JSON.stringify({ mediaId }),
                                 });
                                 if (!res.ok) throw new Error(await res.text());
+                                const selected = mediaList?.find((media) => String(media.id) === mediaId);
+                                if (selected?.url) {
+                                  const nextUrl = appendMediaTypeParam(selected.url, selected.type);
+                                  form.setValue("mediaUrl", nextUrl, { shouldDirty: true });
+                                }
                                 toast({ title: "Media attached", description: "Linked to question." });
                               } catch (e: any) {
                                 toast({ title: "Error", description: e.message || "Failed to attach", variant: "destructive" });

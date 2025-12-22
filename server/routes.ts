@@ -145,6 +145,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!key || !key.startsWith("media/")) return resolved;
     return resolvePublicUrl(req, `/api/media/r2?key=${encodeURIComponent(key)}`);
   };
+  const resolveMediaUrlWithType = (req: any, url?: string | null, mediaType?: string | null) => {
+    const resolved = resolveMediaUrl(req, url);
+    if (!resolved || !mediaType) return resolved;
+    try {
+      const parsed = new URL(resolved);
+      parsed.searchParams.set("mediaType", mediaType);
+      return parsed.toString();
+    } catch {
+      return resolved;
+    }
+  };
   const streamR2Object = async (key: string, res: any) => {
     if (!r2Client || !r2Bucket) {
       res.status(503).json({ error: "R2 is not configured" });
@@ -315,6 +326,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: fromZodError(error).message });
       }
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/profile/avatar/upload", requireAuth, upload.single("file"), async (req: any, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "Missing file" });
+      const { originalname, mimetype, filename } = req.file;
+      if (!mimetype || !mimetype.startsWith("image/")) {
+        return res.status(400).json({ error: "Only image files are supported." });
+      }
+      const safe = originalname.replace(/[^a-zA-Z0-9_.-]/g, "_");
+      const generatedName = `${Date.now()}_${safe}`;
+
+      let url: string;
+      if (isR2Enabled) {
+        if (!req.file.buffer) throw new Error("Upload buffer missing");
+        const r2Key = buildR2Key(originalname, mimetype);
+        await uploadBufferToR2({
+          key: r2Key,
+          body: req.file.buffer,
+          contentType: mimetype,
+        });
+        url = getR2PublicUrl(r2Key);
+      } else {
+        url = resolvePublicUrl(req, `/uploads/${filename ?? generatedName}`);
+      }
+
+      const resolvedUrl = resolveMediaUrl(req, url);
+      res.status(201).json({ url: resolvedUrl });
+    } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
@@ -1382,7 +1424,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const r = await query(`
         SELECT sq.questionId, sq.[section], sq.[order], sq.score,
                q.id, q.title, q.skill, q.[type], q.stem, q.optionsJson, q.answerKey, q.explain,
-               m.url AS mediaUrl
+               m.url AS mediaUrl, m.type AS mediaType
         FROM dbo.aptis_set_questions sq
         JOIN dbo.aptis_questions q ON q.id = sq.questionId
         LEFT JOIN dbo.aptis_media m ON m.id = q.mediaId
@@ -1406,7 +1448,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           options: row.optionsJson ? JSON.parse(row.optionsJson) : [],
           correctAnswers: row.answerKey ? JSON.parse(row.answerKey) : [],
           explanation: row.explain ?? null,
-          mediaUrl: resolveMediaUrl(req, row.mediaUrl ?? null),
+          mediaUrl: resolveMediaUrlWithType(req, row.mediaUrl ?? null, row.mediaType ?? null),
           points: 1,
           tags: [],
         },

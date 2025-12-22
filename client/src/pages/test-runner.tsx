@@ -84,6 +84,20 @@ export default function TestRunner() {
   >(null);
   const current = questions[index];
   const normalizedType = (current?.question.type || "").toLowerCase();
+  const mediaUrl = current?.question.mediaUrl ?? null;
+  const mediaKind = useMemo(() => {
+    if (!mediaUrl) return null;
+    try {
+      const parsed = new URL(mediaUrl, window.location.origin);
+      const param = parsed.searchParams.get("mediaType");
+      if (param) return param;
+    } catch {
+      // ignore parsing errors
+    }
+    if (/\.(mp3|wav|ogg|m4a|aac|flac)(\?|#|$)/i.test(mediaUrl)) return "audio";
+    if (/\.(mp4|webm|mov|mkv|avi)(\?|#|$)/i.test(mediaUrl)) return "video";
+    return "image";
+  }, [mediaUrl]);
   const [notice, setNotice] = useState<(NoticePayload & { id: number }) | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showCompletionOverlay, setShowCompletionOverlay] = useState(false);
@@ -557,14 +571,18 @@ export default function TestRunner() {
               </div>
             </div>
 
-            {current.question.mediaUrl && (
+            {mediaUrl && (
               <div className="pt-2">
                 <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                  {current.question.mediaUrl.match(/\.mp3|\.wav|\.ogg/i) ? (
-                    <audio controls src={current.question.mediaUrl} className="w-full" />
+                  {mediaKind === "audio" ? (
+                    <audio controls src={mediaUrl} className="w-full" />
+                  ) : mediaKind === "video" ? (
+                    <video className="w-full rounded-2xl" controls src={mediaUrl}>
+                      Your browser does not support the video element.
+                    </video>
                   ) : (
                     <img
-                      src={current.question.mediaUrl}
+                      src={mediaUrl}
                       alt="Question media"
                       className="max-h-72 w-full object-cover rounded-2xl"
                     />
