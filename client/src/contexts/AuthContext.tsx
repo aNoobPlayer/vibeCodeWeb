@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
+import { queryClient } from "@/lib/queryClient";
 
 interface User {
   id: string;
@@ -74,6 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     await response.json(); // consume payload so the cookie can be set
+    queryClient.clear();
     const userData = await checkAuth();
     if (!userData) {
       throw new Error("Unable to verify login. Please try again.");
@@ -103,6 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     await response.json().catch(() => null);
+    queryClient.clear();
     const userData = await checkAuth();
     if (!userData) {
       throw new Error("Unable to verify registration. Please try again.");
@@ -122,6 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     authRequestId.current += 1;
     setUser(null);
+    queryClient.clear();
     setLocation("/");
   };
 

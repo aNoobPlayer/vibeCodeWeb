@@ -38,6 +38,7 @@ import {
   RotateCw,
   Clock3,
   Sparkles,
+  X,
 } from "lucide-react";
 import type { Activity, Course, Lesson, TestSet, Tip } from "@shared/schema";
 
@@ -56,9 +57,19 @@ export default function StudentDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const { user, logout } = useAuth();
   const [, setLocation] = useLocation();
+  const trimmedSearch = searchQuery.trim();
+  const hasSearch = trimmedSearch.length > 0;
+  const searchPlaceholder =
+    currentPage === "practice"
+      ? "Tìm kiếm bài luyện tập..."
+      : currentPage === "courses"
+        ? "Tìm kiếm khóa học..."
+        : currentPage === "tips"
+          ? "Tìm kiếm mẹo học..."
+          : "Tìm kiếm...";
 
   return (
-    <div className="min-h-screen flex bg-gradient-to-br from-[#9CCC65] via-[#66BB6A] to-[#1B5E20]">
+    <div className="min-h-screen flex overflow-hidden bg-gradient-to-br from-[#9CCC65] via-[#66BB6A] to-[#1B5E20]">
       {/* Glassmorphic Sidebar */}
       <aside className="w-80 p-6 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-white/5 backdrop-blur-3xl border-r border-white/20"></div>
@@ -76,21 +87,13 @@ export default function StudentDashboard() {
           <div className="bg-gradient-to-br from-white/20 to-white/10 backdrop-blur-xl border border-white/30 rounded-2xl p-4 mb-10 shadow-2xl">
             <div className="text-sm text-white/90 mb-1">Trang hiện tại</div>
             <div className="font-semibold text-lg">
-              {currentPage === "practice"
-                ? "Bài học"
-                : currentPage === "courses"
-                  ? "Courses"
-                  : currentPage === "tips"
-                    ? "Mẹo học"
-                    : "Thống kê"}
+              {currentPage === "practice" ? "Luyện tập" : currentPage === "courses" ? "Khóa học" : currentPage === "tips" ? "Mẹo học" : "Thống kê"}
             </div>
           </div>
 
           {/* Navigation Menu */}
           <div className="space-y-2 mb-auto">
-            <div className="text-xs font-semibold text-white/80 uppercase tracking-wider mb-4">
-              Menu chính
-            </div>
+            <div className="text-xs font-semibold text-white/80 uppercase tracking-wider mb-4">Menu chính</div>
             <Button
               variant="ghost"
               data-testid="nav-student-practice"
@@ -101,8 +104,8 @@ export default function StudentDashboard() {
                   : "hover:bg-white/10 hover:translate-x-2"
               }`}
             >
-              <span className="font-medium">Bài học</span>
-              <span className="text-lg">→</span>
+              <span className="font-medium">Luyện tập</span>
+              <span className="text-lg">›</span>
             </Button>
             <Button
               variant="ghost"
@@ -114,8 +117,8 @@ export default function StudentDashboard() {
                   : "hover:bg-white/10 hover:translate-x-2"
               }`}
             >
-              <span className="font-medium">Courses</span>
-              <span className="text-lg">→</span>
+              <span className="font-medium">Khóa học</span>
+              <span className="text-lg">›</span>
             </Button>
             <Button
               variant="ghost"
@@ -128,7 +131,7 @@ export default function StudentDashboard() {
               }`}
             >
               <span className="font-medium">Mẹo & Hướng dẫn</span>
-              <span className="text-lg">→</span>
+              <span className="text-lg">›</span>
             </Button>
             <Button
               variant="ghost"
@@ -141,7 +144,7 @@ export default function StudentDashboard() {
               }`}
             >
               <span className="font-medium">Tiến độ học tập</span>
-              <span className="text-lg">→</span>
+              <span className="text-lg">›</span>
             </Button>
           </div>
 
@@ -164,26 +167,31 @@ export default function StudentDashboard() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 m-5 bg-white/95 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/20 overflow-hidden">
+      <main className="flex-1 min-h-0 m-5 bg-white/95 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/20 overflow-hidden">
         <div className="h-full scroll-ghost overflow-y-auto">
           {/* Header */}
-          <header className="flex items-center justify-between p-6 border-b border-gray-200">
+          <header className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white/95 p-6 backdrop-blur">
             <div className="flex-1 max-w-md">
               <div className="relative">
                 <div className="flex items-center bg-white/80 backdrop-blur-xl border border-white/30 rounded-full px-6 py-3 shadow-lg focus-within:shadow-xl focus-within:-translate-y-0.5 transition-all">
                   <Input
                     data-testid="input-student-search"
                     type="text"
-                    placeholder="Tìm kiếm bài học..."
+                    placeholder={searchPlaceholder}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="flex-1 bg-transparent border-none outline-none text-gray-800 placeholder-gray-500"
                   />
-                  <Button 
+                  <Button
+                    type="button"
                     data-testid="button-student-search"
                     className="bg-gradient-to-r from-primary to-primary/80 text-white px-4 py-2 rounded-full ml-3 shadow-md hover:shadow-lg hover:scale-105 transition-all"
+                    onClick={() => {
+                      if (hasSearch) setSearchQuery("");
+                    }}
+                    aria-label={hasSearch ? "Xóa tìm kiếm" : "Tìm kiếm"}
                   >
-                    <Search className="w-4 h-4" />
+                    {hasSearch ? <X className="w-4 h-4" /> : <Search className="w-4 h-4" />}
                   </Button>
                 </div>
               </div>
@@ -198,7 +206,7 @@ export default function StudentDashboard() {
                   </div>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>My account</DropdownMenuLabel>
+                <DropdownMenuLabel>Tài khoản</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onSelect={(event) => {
@@ -208,16 +216,16 @@ export default function StudentDashboard() {
                     data-testid="menu-student-profile"
                   >
                     <UserCircle className="mr-2 h-4 w-4" />
-                    <span>Profile</span>
+                    <span>Hồ sơ</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem>
                     <Settings className="mr-2 h-4 w-4" />
-                    <span>Settings</span>
+                    <span>Cài đặt</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={logout} data-testid="button-logout">
                     <LogOut className="mr-2 h-4 w-4" />
-                    <span>Sign out</span>
+                    <span>Đăng xuất</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -226,9 +234,15 @@ export default function StudentDashboard() {
 
           {/* Content */}
           <div className="p-8">
-            {currentPage === "practice" && <PracticePage searchQuery={searchQuery} />}
-            {currentPage === "courses" && <CoursesPage searchQuery={searchQuery} />}
-            {currentPage === "tips" && <TipsPage searchQuery={searchQuery} />}
+            {currentPage === "practice" && (
+              <PracticePage searchQuery={searchQuery} onClearSearch={() => setSearchQuery("")} />
+            )}
+            {currentPage === "courses" && (
+              <CoursesPage searchQuery={searchQuery} onClearSearch={() => setSearchQuery("")} />
+            )}
+            {currentPage === "tips" && (
+              <TipsPage searchQuery={searchQuery} onClearSearch={() => setSearchQuery("")} />
+            )}
             {currentPage === "progress" && <ProgressPage />}
           </div>
         </div>
@@ -267,8 +281,8 @@ function NotificationBell() {
       >
         <div className="px-5 py-4 border-b border-black/5 flex items-center justify-between">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-gray-400">Updates</p>
-            <p className="text-lg font-semibold text-gray-900">Notifications</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-gray-400">Cập nhật</p>
+            <p className="text-lg font-semibold text-gray-900">Thông báo</p>
           </div>
           <Button
             type="button"
@@ -286,7 +300,7 @@ function NotificationBell() {
         </div>
         <div className="max-h-[360px] scroll-ghost overflow-y-auto divide-y divide-gray-100">
           {isLoading ? (
-            <div className="px-5 py-10 text-center text-sm text-gray-500">Loading latest updates...</div>
+            <div className="px-5 py-10 text-center text-sm text-gray-500">Đang tải thông báo mới...</div>
           ) : notifications && notifications.length > 0 ? (
             notifications.map((notification) => {
               const palette = getNotificationPalette(notification.action);
@@ -376,7 +390,13 @@ function getNotificationPalette(action: string) {
 }
 
 // Practice Page Component
-function PracticePage({ searchQuery }: { searchQuery: string }) {
+function PracticePage({
+  searchQuery,
+  onClearSearch,
+}: {
+  searchQuery: string;
+  onClearSearch: () => void;
+}) {
   const [activeSkill, setActiveSkill] = useState("all");
   
   const { data: testSets } = useQuery<TestSet[]>({
@@ -388,6 +408,7 @@ function PracticePage({ searchQuery }: { searchQuery: string }) {
     if (searchQuery && !set.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
+  const hasSearch = searchQuery.trim().length > 0;
 
   const skillCategories = {
     all: { label: "Tất cả", sets: filteredSets || [] },
@@ -401,9 +422,7 @@ function PracticePage({ searchQuery }: { searchQuery: string }) {
     <div className="space-y-10 animate-fadeIn">
       {/* Title with Gradient */}
       <div className="text-center">
-        <h1 className="text-5xl font-bold bg-gradient-to-r from-primary via-accent to-warning bg-clip-text text-transparent mb-3 tracking-tight">
-          Luyện tập APTIS
-        </h1>
+        <h1 className="text-5xl font-bold bg-gradient-to-r from-primary via-accent to-warning bg-clip-text text-transparent mb-3 tracking-tight">Luyện tập APTIS</h1>
         <p className="text-gray-600 text-lg">Chọn kỹ năng và bắt đầu luyện tập ngay!</p>
       </div>
 
@@ -429,7 +448,14 @@ function PracticePage({ searchQuery }: { searchQuery: string }) {
       {!filteredSets || filteredSets.length === 0 ? (
         <div className="text-center py-20">
           <Library className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-          <p className="text-gray-500 text-lg">Chưa có bài luyện tập nào</p>
+          <p className="text-gray-500 text-lg">
+            {hasSearch ? "Không tìm thấy bài luyện tập phù hợp." : "Chưa có bài luyện tập nào."}
+          </p>
+          {hasSearch && (
+            <Button variant="outline" className="mt-4" onClick={onClearSearch}>
+              Xóa tìm kiếm
+            </Button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-5" data-testid="practice-cards-grid">
@@ -521,7 +547,13 @@ function PracticeCard({ testSet }: { testSet: TestSet }) {
 
 
 // Courses Page Component
-function CoursesPage({ searchQuery }: { searchQuery: string }) {
+function CoursesPage({
+  searchQuery,
+  onClearSearch,
+}: {
+  searchQuery: string;
+  onClearSearch: () => void;
+}) {
   const [filterSkill, setFilterSkill] = useState("");
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
@@ -543,6 +575,7 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
       (course.description ?? "").toLowerCase().includes(q)
     );
   });
+  const hasSearch = searchQuery.trim().length > 0;
 
   const courseGroups = useMemo(() => {
     const studying = filteredCourses.filter((course) => course.enrollmentStatus === "approved");
@@ -643,6 +676,13 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
       return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     });
   }, [filteredLessons]);
+  const lessonOrderMap = useMemo(() => {
+    const map = new Map<string, number>();
+    sortedLessons.forEach((lesson, index) => {
+      map.set(lesson.id, index + 1);
+    });
+    return map;
+  }, [sortedLessons]);
 
   const lessonsByLevel = useMemo(() => {
     const map = new Map<number, Lesson[]>();
@@ -653,6 +693,10 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
     });
     return map;
   }, [sortedLessons]);
+  const levelsSorted = useMemo(
+    () => Array.from(lessonsByLevel.keys()).sort((a, b) => a - b),
+    [lessonsByLevel],
+  );
 
   const passThreshold = activeCourse?.passThreshold ?? 80;
   const completionByLevel = useMemo(() => {
@@ -715,11 +759,18 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
     ? eligibleLessons.findIndex((lesson) => lesson.id === activeLesson.id)
     : -1;
   const activeLessonVideo = getYouTubeEmbedUrl(activeLesson?.youtubeUrl ?? null);
+  const activeContentParagraphs = useMemo(() => {
+    const text = activeLesson?.content ?? "";
+    return text
+      .split(/\n+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }, [activeLesson?.content]);
   const activeOutcomes = (activeLesson?.outcomes ?? []).filter((item) => item && item.trim());
   const activeKeyPoints = (activeLesson?.keyPoints ?? []).filter((item) => item && item.trim());
   const activePractice = (activeLesson?.practicePrompts ?? []).filter((item) => item && item.trim());
   const activeTestSetLabel = activeLesson?.testSetId
-    ? testSetMap.get(String(activeLesson.testSetId)) ?? "Practice test"
+    ? testSetMap.get(String(activeLesson.testSetId)) ?? "Bài luyện tập"
     : null;
   const totalDuration = useMemo(
     () => sortedLessons.reduce((sum, lesson) => sum + (lesson.durationMinutes ?? 0), 0),
@@ -733,7 +784,55 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
     eligibleLessons.length > 0
       ? `${Math.max(1, activeLessonIndex + 1)} / ${eligibleLessons.length}`
       : "0 / 0";
-  const totalDurationLabel = totalDuration > 0 ? `${totalDuration} min total` : "Self-paced";
+  const totalDurationLabel = totalDuration > 0 ? `${totalDuration} phút` : "Tự học";
+  const totalLessons = sortedLessons.length;
+  const unlockedLessons = eligibleLessons.length;
+  const lockedLessons = Math.max(0, totalLessons - unlockedLessons);
+  const totalLevels = levelsSorted.length;
+  const unlockedLevels = levelsSorted.filter((level) => level <= unlockedLevel).length;
+  const currentLevelProgress = completionByLevel.get(unlockedLevel)?.percent ?? 0;
+  const activeLessonScore =
+    activeLesson?.testSetId ? bestScoresBySet.get(String(activeLesson.testSetId)) ?? null : null;
+  const activeLessonPassed = activeLessonScore !== null && activeLessonScore >= passThreshold;
+  const courseAverageScore = useMemo(() => {
+    const scores: number[] = [];
+    sortedLessons.forEach((lesson) => {
+      if (!lesson.testSetId) return;
+      const score = bestScoresBySet.get(String(lesson.testSetId));
+      if (typeof score === "number") scores.push(score);
+    });
+    if (scores.length === 0) return null;
+    const total = scores.reduce((sum, score) => sum + score, 0);
+    return Math.round(total / scores.length);
+  }, [sortedLessons, bestScoresBySet]);
+  const learningChecklist = useMemo(
+    () => [
+      { label: "Tóm tắt", value: activeLesson?.description ? "Sẵn sàng" : "Chưa có" },
+      {
+        label: "Nội dung",
+        value: activeContentParagraphs.length ? `${activeContentParagraphs.length} đoạn` : "Chưa có",
+      },
+      {
+        label: "Mục tiêu",
+        value: activeOutcomes.length ? `${activeOutcomes.length} mục tiêu` : "Chưa có",
+      },
+      {
+        label: "Điểm cần nhớ",
+        value: activeKeyPoints.length ? `${activeKeyPoints.length} ý chính` : "Chưa có",
+      },
+      {
+        label: "Thực hành",
+        value: activePractice.length ? `${activePractice.length} bài` : "Chưa có",
+      },
+    ],
+    [
+      activeLesson?.description,
+      activeContentParagraphs.length,
+      activeOutcomes.length,
+      activeKeyPoints.length,
+      activePractice.length,
+    ],
+  );
   const canGoPrev = activeLessonIndex > 0;
   const canGoNext = activeLessonIndex >= 0 && activeLessonIndex < sortedLessons.length - 1;
   const goPrev = () => {
@@ -746,12 +845,12 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
   };
 
   const skillLabels: Record<string, string> = {
-    Reading: "Reading",
-    Listening: "Listening",
-    Speaking: "Speaking",
-    Writing: "Writing",
-    GrammarVocabulary: "Grammar & Vocabulary",
-    General: "General",
+    Reading: "Đọc hiểu",
+    Listening: "Nghe hiểu",
+    Speaking: "Nói",
+    Writing: "Viết",
+    GrammarVocabulary: "Ngữ pháp & Từ vựng",
+    General: "Tổng hợp",
   };
 
   const applyMutation = useMutation({
@@ -767,14 +866,14 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/courses"] });
       toast({
-        title: "Application submitted",
-        description: "Your request is pending approval from the instructor.",
+        title: "Đã gửi đăng ký",
+        description: "Yêu cầu của bạn đang chờ giảng viên duyệt.",
       });
     },
     onError: (error: any) => {
       toast({
-        title: "Unable to apply",
-        description: error?.message ?? "Please try again.",
+        title: "Không thể đăng ký",
+        description: error?.message ?? "Vui lòng thử lại.",
         variant: "destructive",
       });
     },
@@ -798,7 +897,7 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
       setLocation(`/student/test/${testSetId}/${submissionId}`);
     } catch (error) {
       console.error(error);
-      alert("Cannot start test. Please login or try again.");
+      alert("Không thể bắt đầu bài kiểm tra. Vui lòng đăng nhập hoặc thử lại.");
     }
   };
 
@@ -807,12 +906,12 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
     const isActive = course.id === selectedCourseId;
     const statusLabel =
       status === "approved"
-        ? "Enrolled"
+        ? "Đang học"
         : status === "pending"
-          ? "Pending"
+          ? "Chờ duyệt"
           : status === "rejected"
-            ? "Rejected"
-            : "Open";
+            ? "Từ chối"
+            : "Mở đăng ký";
     return (
       <button
         key={course.id}
@@ -842,7 +941,7 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
           </span>
         </div>
         <p className="mt-2 text-sm text-gray-600 line-clamp-2">
-          {course.description || "No course description yet."}
+          {course.description || "Chưa có mô tả khóa học."}
         </p>
       </button>
     );
@@ -852,23 +951,30 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
     <div className="space-y-8 animate-fadeIn">
       <div className="text-center">
         <h1 className="text-5xl font-bold bg-gradient-to-r from-primary via-accent to-warning bg-clip-text text-transparent mb-3 tracking-tight">
-          Courses
+          Khóa học
         </h1>
-        <p className="text-gray-600 text-lg">Pick a course to start learning.</p>
+        <p className="text-gray-600 text-lg">Chọn khóa học để bắt đầu học.</p>
       </div>
 
       {filteredCourses.length === 0 ? (
         <div className="text-center py-20">
           <Library className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-          <p className="text-gray-500 text-lg">No courses available yet.</p>
+          <p className="text-gray-500 text-lg">
+            {hasSearch ? "Không tìm thấy khóa học phù hợp." : "Chưa có khóa học nào."}
+          </p>
+          {hasSearch && (
+            <Button variant="outline" className="mt-4" onClick={onClearSearch}>
+              Xóa tìm kiếm
+            </Button>
+          )}
         </div>
       ) : (
         <div className="space-y-5">
           <div className="flex flex-wrap items-center justify-center gap-2">
             {([
-              { key: "studying", label: "Studying", count: courseGroups.studying.length },
-              { key: "pending", label: "Pending", count: courseGroups.pending.length },
-              { key: "open", label: "Not registered", count: courseGroups.open.length },
+              { key: "studying", label: "Đang học", count: courseGroups.studying.length },
+              { key: "pending", label: "Chờ duyệt", count: courseGroups.pending.length },
+              { key: "open", label: "Chưa đăng ký", count: courseGroups.open.length },
             ] as const).map((tab) => (
               <button
                 key={tab.key}
@@ -888,10 +994,10 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
             {visibleCourses.length === 0 ? (
               <Card className="p-5 text-sm text-gray-500">
                 {activeGroup === "studying"
-                  ? "You are not enrolled in any course yet."
+                  ? "Bạn chưa đăng ký khóa học nào."
                   : activeGroup === "pending"
-                    ? "No pending applications."
-                    : "No courses to register right now."}
+                    ? "Không có yêu cầu chờ duyệt."
+                    : "Chưa có khóa học để đăng ký."}
               </Card>
             ) : (
               visibleCourses.map(renderCourseCard)
@@ -908,27 +1014,27 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
             <div className="relative space-y-5">
               <div className="flex flex-wrap items-start justify-between gap-5">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.35em] text-gray-400">Active course</p>
+                  <p className="text-xs uppercase tracking-[0.35em] text-gray-400">Khóa học đang chọn</p>
                   <h2 className="text-3xl font-bold text-gray-900 mt-2">{activeCourse.name}</h2>
                   <p className="mt-2 text-gray-600 text-sm md:text-base">
-                    {activeCourse.description || "No course description yet."}
+                    {activeCourse.description || "Chưa có mô tả khóa học."}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
                   <span className="rounded-full bg-white/90 px-3 py-1 text-gray-600 shadow-sm">
-                    {sortedLessons.length} lessons
+                    {sortedLessons.length} bài học
                   </span>
                   <span className="rounded-full bg-white/90 px-3 py-1 text-gray-600 shadow-sm">
                     {totalDurationLabel}
                   </span>
                   <span className="rounded-full bg-white/90 px-3 py-1 text-gray-600 shadow-sm">
-                    {filterSkill ? skillLabels[filterSkill] ?? filterSkill : "All skills"}
+                    {filterSkill ? skillLabels[filterSkill] ?? filterSkill : "Tất cả kỹ năng"}
                   </span>
                 </div>
               </div>
               <div>
                 <div className="flex items-center justify-between text-xs text-gray-500">
-                  <span>Course progress</span>
+                  <span>Tiến độ khóa học</span>
                   <span>{progressLabel}</span>
                 </div>
                 <div className="mt-2">
@@ -938,27 +1044,123 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
                   <p className="mt-2 text-xs text-gray-500">
                     {lessonsByLevel.has(unlockedLevel + 1)
                       ? completionByLevel.get(unlockedLevel)?.totalTests
-                        ? `Complete Level ${unlockedLevel} tests at ${passThreshold}% to unlock Level ${
+                        ? `Hoàn thành bài kiểm tra cấp độ ${unlockedLevel} đạt ${passThreshold}% để mở khóa cấp độ ${
                             unlockedLevel + 1
-                          }. Current: ${completionByLevel.get(unlockedLevel)?.percent ?? 0}%`
-                        : `Level ${unlockedLevel} has no tests. You can move on to Level ${
+                          }. Hiện tại: ${completionByLevel.get(unlockedLevel)?.percent ?? 0}%`
+                        : `Cấp độ ${unlockedLevel} không có bài kiểm tra. Bạn có thể chuyển sang cấp độ ${
                             unlockedLevel + 1
                           }.`
-                      : "All available levels are unlocked."}
+                      : "Tất cả cấp độ đã được mở khóa."}
                   </p>
                 )}
               </div>
             </div>
           </div>
 
+          {isEnrolled && (
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,0.65fr)]">
+              <div className="relative overflow-hidden rounded-3xl border border-white/60 bg-white/80 p-6 shadow-xl backdrop-blur-xl">
+                <div className="absolute -right-20 -top-24 h-48 w-48 rounded-full bg-primary/10 blur-3xl" />
+                <div className="relative space-y-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.35em] text-gray-400">Lộ trình hôm nay</p>
+                      <h3 className="text-2xl font-semibold text-gray-900">
+                        {activeLesson?.title ?? "Chưa có bài học"}
+                      </h3>
+                      <p className="mt-2 text-sm text-gray-600">
+                        {activeLesson?.description || "Chọn một bài học để bắt đầu lộ trình."}
+                      </p>
+                    </div>
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                      <Sparkles className="h-6 w-6" />
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+                    {activeLesson ? (
+                      <>
+                        <span className="rounded-full bg-white/80 px-2 py-1">
+                          Cấp độ {activeLesson.level ?? 1}
+                        </span>
+                        <span className="rounded-full bg-white/80 px-2 py-1">
+                          {skillLabels[activeLesson.skill] ?? activeLesson.skill}
+                        </span>
+                        <span className="rounded-full bg-white/80 px-2 py-1">
+                          {activeLesson.durationMinutes ? `${activeLesson.durationMinutes} phút` : "Tự học"}
+                        </span>
+                        {activeLesson.testSetId && (
+                          <span className="rounded-full bg-indigo-100 px-2 py-1 text-indigo-700">
+                            Có bài kiểm tra
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="rounded-full bg-white/80 px-2 py-1">
+                        Chưa có bài học để hiển thị.
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <Button
+                      onClick={() => {
+                        if (activeLesson) setSelectedLesson(activeLesson);
+                      }}
+                      disabled={!activeLesson}
+                    >
+                      {activeLesson ? "Tiếp tục học" : "Chưa có bài học"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                <div className="rounded-2xl border border-white/60 bg-white/80 p-4 shadow-sm">
+                  <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    <span>Tiến độ bài học</span>
+                    <BookOpen className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="mt-2 text-2xl font-semibold text-gray-900">{progressPercent}%</div>
+                  <p className="text-xs text-gray-500">
+                    {unlockedLessons}/{totalLessons} bài đã mở, {lockedLessons} khóa
+                  </p>
+                  <Progress value={progressPercent} className="mt-3 h-1.5" />
+                </div>
+                <div className="rounded-2xl border border-white/60 bg-white/80 p-4 shadow-sm">
+                  <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    <span>Cấp độ hiện tại</span>
+                    <BarChart3 className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="mt-2 text-2xl font-semibold text-gray-900">
+                    {totalLevels > 0 ? `Cấp ${unlockedLevel}` : "-"}
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    {totalLevels > 0 ? `${unlockedLevels}/${totalLevels} cấp đã mở` : "Chưa có cấp độ"}
+                  </p>
+                  <Progress value={currentLevelProgress} className="mt-3 h-1.5" />
+                  <p className="mt-2 text-xs text-gray-500">Mục tiêu: đạt {passThreshold}% để mở cấp tiếp theo.</p>
+                </div>
+                <div className="rounded-2xl border border-white/60 bg-white/80 p-4 shadow-sm sm:col-span-2 lg:col-span-1">
+                  <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    <span>Điểm kiểm tra</span>
+                    <Trophy className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="mt-2 text-2xl font-semibold text-gray-900">
+                    {courseAverageScore !== null ? `${courseAverageScore}%` : "Chưa có"}
+                  </div>
+                  <p className="text-xs text-gray-500">Trung bình các bài kiểm tra trong khóa học.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {!isEnrolled ? (
             <Card className="p-6 text-center">
               <p className="text-sm text-gray-600">
                 {enrollmentStatus === "pending"
-                  ? "Your application is pending approval."
+                  ? "Đơn đăng ký của bạn đang chờ duyệt."
                   : enrollmentStatus === "rejected"
-                    ? "Your application was rejected. You can re-apply when ready."
-                    : "Apply to join this course to unlock the lessons and practice tasks."}
+                    ? "Đơn đăng ký đã bị từ chối. Bạn có thể đăng ký lại khi sẵn sàng."
+                    : "Hãy đăng ký khóa học để mở khóa bài học và bài luyện tập."}
               </p>
               <div className="mt-4 flex justify-center">
                 <Button
@@ -966,14 +1168,14 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
                   onClick={() => applyMutation.mutate(activeCourse.id)}
                 >
                   {!isOpen
-                    ? "Enrollment closed"
+                    ? "Đã đóng đăng ký"
                     : enrollmentStatus === "pending"
-                      ? "Pending approval"
+                      ? "Chờ duyệt"
                       : applyMutation.isPending
-                        ? "Submitting..."
+                        ? "Đang gửi..."
                         : enrollmentStatus === "rejected"
-                          ? "Re-apply"
-                          : "Apply to enroll"}
+                          ? "Đăng ký lại"
+                          : "Đăng ký học"}
                 </Button>
               </div>
             </Card>
@@ -989,7 +1191,7 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
                       : "bg-white/60 text-gray-700 hover:bg-white/80"
                   }`}
                 >
-                  All skills
+                  Tất cả kỹ năng
                 </button>
                 {[
                   "Reading",
@@ -1017,7 +1219,7 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
               {sortedLessons.length === 0 ? (
                 <div className="text-center py-20">
                   <BookOpen className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                  <p className="text-gray-500 text-lg">No lessons available yet.</p>
+                  <p className="text-gray-500 text-lg">Chưa có bài học nào.</p>
                 </div>
               ) : (
                 <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]" data-testid="lessons-grid">
@@ -1025,82 +1227,126 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
                     <div className="rounded-3xl border border-white/60 bg-white/80 p-5 shadow-lg backdrop-blur-xl">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Course outline</p>
-                          <p className="text-lg font-semibold text-gray-900">Lessons</p>
+                          <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Lộ trình khóa học</p>
+                          <p className="text-lg font-semibold text-gray-900">Bài học</p>
                         </div>
-                        <span className="text-xs text-gray-500">{sortedLessons.length} steps</span>
+                        <span className="text-xs text-gray-500">{sortedLessons.length} bài</span>
                       </div>
-                      <div className="mt-4 max-h-[520px] scroll-ghost overflow-y-auto space-y-2 pr-1">
-                        {sortedLessons.map((lesson, index) => {
-                          const isActive = activeLesson?.id === lesson.id;
-                          const level = lesson.level ?? 1;
-                          const isLocked = level > unlockedLevel;
+                      <div className="mt-4 max-h-[520px] scroll-ghost overflow-y-auto space-y-4 pr-1">
+                        {levelsSorted.map((level) => {
+                          const lessons = lessonsByLevel.get(level) ?? [];
+                          const completion = completionByLevel.get(level);
+                          const isLevelLocked = level > unlockedLevel;
                           return (
-                            <button
-                              key={lesson.id}
-                              data-testid={`lesson-card-${lesson.id}`}
-                              onClick={() => {
-                                if (!isLocked) setSelectedLesson(lesson);
-                              }}
-                              className={`w-full rounded-2xl border px-4 py-3 text-left transition-all ${
-                                isLocked
-                                  ? "border-dashed border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
-                                  : isActive
-                                  ? "border-primary/30 bg-primary/10 shadow-md"
-                                  : "border-white/70 bg-white/70 hover:bg-white"
-                              }`}
-                            >
-                              <div className="flex items-start gap-3">
-                                <div
-                                  className={`flex h-10 w-10 items-center justify-center rounded-xl text-sm font-semibold ${
-                                    isActive && !isLocked
-                                      ? "bg-primary text-white"
-                                      : "bg-gray-100 text-gray-600"
-                                  }`}
-                                >
-                                  {String(index + 1).padStart(2, "0")}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-start justify-between gap-3">
-                                    <p
-                                      className={`text-sm font-semibold ${
-                                        isActive && !isLocked ? "text-primary" : "text-gray-900"
-                                      }`}
-                                    >
-                                      {lesson.title}
-                                    </p>
-                                    {lesson.testSetId && (
-                                      <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-600">
-                                        Test
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="mt-1 text-xs text-gray-500 line-clamp-2">
-                                    {lesson.description || lesson.content}
-                                  </p>
-                                  <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-gray-500">
-                                    <span className="rounded-full bg-white/80 px-2 py-0.5">
-                                      Level {level}
-                                    </span>
-                                    <span className="rounded-full bg-white/80 px-2 py-0.5">
-                                      {skillLabels[lesson.skill] ?? lesson.skill}
-                                    </span>
-                                    <span className="rounded-full bg-white/80 px-2 py-0.5">
-                                      {lesson.durationMinutes ? `${lesson.durationMinutes} min` : "Self-paced"}
-                                    </span>
-                                  </div>
-                                </div>
-                                {isLocked ? (
-                                  <span className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                                    Locked
+                            <div key={`level-${level}`} className="space-y-2">
+                              <div className="flex items-center justify-between px-2 text-xs text-gray-500">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold uppercase tracking-wide text-gray-400">
+                                    Cấp độ {level}
                                   </span>
-                                ) : isActive ? (
-                                  <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                                    Now
+                                  {isLevelLocked && (
+                                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                                      Chưa mở
+                                    </span>
+                                  )}
+                                </div>
+                                {completion?.totalTests ? (
+                                  <span>
+                                    {completion.passedTests}/{completion.totalTests} bài kiểm tra đạt ({completion.percent}%)
                                   </span>
-                                ) : null}
+                                ) : (
+                                  <span>Chưa có bài kiểm tra</span>
+                                )}
                               </div>
-                            </button>
+                              <div className="mt-2 px-2">
+                                <Progress value={completion?.percent ?? 0} className="h-1.5" />
+                              </div>
+                              {lessons.map((lesson) => {
+                                const isActive = activeLesson?.id === lesson.id;
+                                const isLocked = (lesson.level ?? 1) > unlockedLevel;
+                                const order = lessonOrderMap.get(lesson.id) ?? 0;
+                                const testScore = lesson.testSetId
+                                  ? bestScoresBySet.get(String(lesson.testSetId)) ?? null
+                                  : null;
+                                const isPassed = testScore !== null && testScore >= passThreshold;
+                                return (
+                                  <button
+                                    key={lesson.id}
+                                    data-testid={`lesson-card-${lesson.id}`}
+                                    onClick={() => {
+                                      if (!isLocked) setSelectedLesson(lesson);
+                                    }}
+                                    className={`w-full rounded-2xl border px-4 py-3 text-left transition-all ${
+                                      isLocked
+                                        ? "border-dashed border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
+                                        : isActive
+                                        ? "border-primary/30 bg-primary/10 shadow-md"
+                                        : "border-white/70 bg-white/70 hover:bg-white"
+                                    }`}
+                                  >
+                                    <div className="flex items-start gap-3">
+                                      <div
+                                        className={`flex h-10 w-10 items-center justify-center rounded-xl text-sm font-semibold ${
+                                          isActive && !isLocked
+                                            ? "bg-primary text-white"
+                                            : "bg-gray-100 text-gray-600"
+                                        }`}
+                                      >
+                                        {String(order || 0).padStart(2, "0")}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-start justify-between gap-3">
+                                          <p
+                                            className={`text-sm font-semibold ${
+                                              isActive && !isLocked ? "text-primary" : "text-gray-900"
+                                            }`}
+                                          >
+                                            {lesson.title}
+                                          </p>
+                                          {lesson.testSetId && (
+                                            <span
+                                              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                                                isPassed
+                                                  ? "bg-emerald-100 text-emerald-700"
+                                                  : testScore !== null
+                                                    ? "bg-amber-100 text-amber-700"
+                                                    : "bg-indigo-100 text-indigo-600"
+                                              }`}
+                                            >
+                                              {testScore === null
+                                                ? "Chưa làm"
+                                                : isPassed
+                                                  ? `Đạt ${testScore}%`
+                                                  : `${testScore}%`}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <p className="mt-1 text-xs text-gray-500 line-clamp-2">
+                                          {lesson.description || lesson.content}
+                                        </p>
+                                        <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-gray-500">
+                                          <span className="rounded-full bg-white/80 px-2 py-0.5">
+                                            {skillLabels[lesson.skill] ?? lesson.skill}
+                                          </span>
+                                          <span className="rounded-full bg-white/80 px-2 py-0.5">
+                                            {lesson.durationMinutes ? `${lesson.durationMinutes} phút` : "Tự học"}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      {isLocked ? (
+                                        <span className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                                          Đã khóa
+                                        </span>
+                                      ) : isActive ? (
+                                        <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                                          Đang học
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
                           );
                         })}
                       </div>
@@ -1112,10 +1358,11 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
                       <div className="rounded-3xl border border-white/60 bg-white/90 p-6 shadow-xl backdrop-blur-xl">
                         <div className="flex flex-wrap items-start justify-between gap-4">
                           <div>
-                            <p className="text-xs uppercase tracking-[0.35em] text-gray-400">Now learning</p>
+                            <p className="text-xs uppercase tracking-[0.35em] text-gray-400">Đang học</p>
                             <h2 className="text-2xl font-semibold text-gray-900">{activeLesson.title}</h2>
-                            <p className="mt-2 text-sm text-gray-600">
-                              {activeLesson.description || "No summary yet."}
+                            <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Tóm tắt</p>
+                            <p className="mt-1 text-sm text-gray-600">
+                              {activeLesson.description || "Chưa có tóm tắt."}
                             </p>
                           </div>
                           <Badge
@@ -1132,22 +1379,29 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
                                       : "bg-gray-100 text-gray-700"
                             }
                           >
-                            {activeLesson.skill}
+                            {skillLabels[activeLesson.skill] ?? activeLesson.skill}
                           </Badge>
                         </div>
                         <div className="mt-4 flex flex-wrap gap-2 text-xs text-gray-500">
-                          <span className="rounded-full bg-gray-100 px-2 py-1">Lesson {progressLabel}</span>
+                          <span className="rounded-full bg-gray-100 px-2 py-1">Bài học {progressLabel}</span>
                           <span className="rounded-full bg-gray-100 px-2 py-1">
-                            Level {activeLesson.level ?? 1}
+                            Cấp độ {activeLesson.level ?? 1}
                           </span>
                           <span className="rounded-full bg-gray-100 px-2 py-1">
-                            {activeLesson.durationMinutes ? `${activeLesson.durationMinutes} min` : "Self-paced"}
+                            {activeLesson.durationMinutes ? `${activeLesson.durationMinutes} phút` : "Tự học"}
                           </span>
                           {activeLesson.testSetId && (
                             <span className="rounded-full bg-indigo-100 px-2 py-1 text-indigo-700">
-                              Test ready
+                              Có bài kiểm tra
                             </span>
                           )}
+                        </div>
+                        <div className="mt-4">
+                          <div className="flex items-center justify-between text-xs text-gray-500">
+                            <span>Tiến độ bài học</span>
+                            <span>{progressPercent}%</span>
+                          </div>
+                          <Progress value={progressPercent} className="mt-2 h-2" />
                         </div>
 
                         {activeLessonVideo ? (
@@ -1172,59 +1426,130 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
                           </div>
                         ) : null}
 
-                        <div className="mt-6 grid gap-4 md:grid-cols-3">
-                          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Objectives</p>
-                            {activeOutcomes.length > 0 ? (
-                              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
-                                {activeOutcomes.map((item, index) => (
-                                  <li key={`outcome-${index}`}>{item}</li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <p className="mt-2 text-sm text-gray-400">No objectives added.</p>
-                            )}
+                        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                          <div className="space-y-4">
+                            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Nội dung</p>
+                              {activeContentParagraphs.length > 0 ? (
+                                <div className="mt-3 space-y-3 text-sm text-gray-700">
+                                  {activeContentParagraphs.map((paragraph, index) => (
+                                    <p key={`content-${index}`}>{paragraph}</p>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="mt-2 text-sm text-gray-400">Chưa có nội dung bài học.</p>
+                              )}
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Mục tiêu</p>
+                                {activeOutcomes.length > 0 ? (
+                                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
+                                    {activeOutcomes.map((item, index) => (
+                                      <li key={`outcome-${index}`}>{item}</li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <p className="mt-2 text-sm text-gray-400">Chưa có mục tiêu.</p>
+                                )}
+                              </div>
+                              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Điểm cần nhớ</p>
+                                {activeKeyPoints.length > 0 ? (
+                                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
+                                    {activeKeyPoints.map((item, index) => (
+                                      <li key={`keypoint-${index}`}>{item}</li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <p className="mt-2 text-sm text-gray-400">Chưa có điểm cần nhớ.</p>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Luyện tập</p>
+                              {activePractice.length > 0 ? (
+                                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
+                                  {activePractice.map((item, index) => (
+                                    <li key={`practice-${index}`}>{item}</li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p className="mt-2 text-sm text-gray-400">Chưa có bài luyện tập.</p>
+                              )}
+                            </div>
                           </div>
-                          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Key takeaways</p>
-                            {activeKeyPoints.length > 0 ? (
-                              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
-                                {activeKeyPoints.map((item, index) => (
-                                  <li key={`keypoint-${index}`}>{item}</li>
+
+                          <div className="space-y-4">
+                            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Lộ trình học gợi ý</p>
+                              <div className="mt-3 space-y-2 text-sm">
+                                {learningChecklist.map((item) => (
+                                  <div key={item.label} className="flex items-center justify-between">
+                                    <span className="text-gray-600">{item.label}</span>
+                                    <span
+                                      className={`text-xs font-semibold ${
+                                        item.value === "Chưa có" ? "text-gray-400" : "text-emerald-600"
+                                      }`}
+                                    >
+                                      {item.value}
+                                    </span>
+                                  </div>
                                 ))}
-                              </ul>
-                            ) : (
-                              <p className="mt-2 text-sm text-gray-400">No key points added.</p>
-                            )}
-                          </div>
-                          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Practice</p>
-                            {activePractice.length > 0 ? (
-                              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
-                                {activePractice.map((item, index) => (
-                                  <li key={`practice-${index}`}>{item}</li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <p className="mt-2 text-sm text-gray-400">No practice tasks yet.</p>
-                            )}
+                              </div>
+                            </div>
+                            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Bài kiểm tra</p>
+                              {activeLesson?.testSetId ? (
+                                <div className="mt-3 space-y-3">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="text-sm font-semibold text-gray-900">
+                                      {activeTestSetLabel ?? "Bài luyện tập"}
+                                    </p>
+                                    <span
+                                      className={`text-xs font-semibold ${
+                                        activeLessonScore === null
+                                          ? "text-gray-400"
+                                          : activeLessonPassed
+                                            ? "text-emerald-600"
+                                            : "text-amber-600"
+                                      }`}
+                                    >
+                                      {activeLessonScore !== null ? `${activeLessonScore}%` : "Chưa làm"}
+                                    </span>
+                                  </div>
+                                  <Progress value={activeLessonScore ?? 0} className="h-1.5" />
+                                  <p className="text-xs text-gray-500">
+                                    Mục tiêu: đạt {passThreshold}% để mở cấp độ tiếp theo.
+                                  </p>
+                                  <Button
+                                    size="sm"
+                                    className="w-full"
+                                    onClick={() => startLessonTest(activeLesson.testSetId)}
+                                  >
+                                    Bắt đầu kiểm tra
+                                  </Button>
+                                </div>
+                              ) : (
+                                <p className="mt-2 text-sm text-gray-500">
+                                  Chưa có bài kiểm tra cho bài học này.
+                                </p>
+                              )}
+                            </div>
                           </div>
                         </div>
 
                         <div className="mt-6 flex flex-wrap items-center gap-3">
                           <Button variant="outline" onClick={goPrev} disabled={!canGoPrev}>
-                            Previous
+                            Bài trước
                           </Button>
                           <Button variant="outline" onClick={goNext} disabled={!canGoNext}>
-                            Next
+                            Bài tiếp
                           </Button>
-                          {activeLesson?.testSetId && (
-                            <Button onClick={() => startLessonTest(activeLesson.testSetId)}>
-                              Start test
-                            </Button>
-                          )}
                           {activeTestSetLabel && (
-                            <span className="text-xs text-gray-500">{activeTestSetLabel}</span>
+                            <span className="text-xs text-gray-500">Bài luyện tập: {activeTestSetLabel}</span>
                           )}
                         </div>
                       </div>
@@ -1242,7 +1567,13 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
 
 // Tips Page Component
 
-function TipsPage({ searchQuery }: { searchQuery: string }) {
+function TipsPage({
+  searchQuery,
+  onClearSearch,
+}: {
+  searchQuery: string;
+  onClearSearch: () => void;
+}) {
   const [filterSkill, setFilterSkill] = useState("");
 
   const { data: tips } = useQuery<Tip[]>({
@@ -1255,13 +1586,12 @@ function TipsPage({ searchQuery }: { searchQuery: string }) {
     if (searchQuery && !tip.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
+  const hasSearch = searchQuery.trim().length > 0;
 
   return (
     <div className="space-y-8 animate-fadeIn">
       <div className="text-center">
-        <h1 className="text-5xl font-bold bg-gradient-to-r from-primary via-accent to-warning bg-clip-text text-transparent mb-3 tracking-tight">
-          Mẹo & Hướng dẫn
-        </h1>
+        <h1 className="text-5xl font-bold bg-gradient-to-r from-primary via-accent to-warning bg-clip-text text-transparent mb-3 tracking-tight">Mẹo & Hướng dẫn</h1>
         <p className="text-gray-600 text-lg">Tổng hợp các mẹo học hiệu quả cho kỳ thi APTIS</p>
       </div>
 
@@ -1298,7 +1628,14 @@ function TipsPage({ searchQuery }: { searchQuery: string }) {
       {!filteredTips || filteredTips.length === 0 ? (
         <div className="text-center py-20">
           <Lightbulb className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-          <p className="text-gray-500 text-lg">Chưa có mẹo học nào</p>
+          <p className="text-gray-500 text-lg">
+            {hasSearch ? "Không tìm thấy mẹo học phù hợp." : "Chưa có mẹo học nào."}
+          </p>
+          {hasSearch && (
+            <Button variant="outline" className="mt-4" onClick={onClearSearch}>
+              Xóa tìm kiếm
+            </Button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-6" data-testid="tips-grid">
@@ -1349,9 +1686,7 @@ function ProgressPage() {
   return (
     <div className="space-y-8 animate-fadeIn">
       <div className="text-center">
-        <h1 className="text-5xl font-bold bg-gradient-to-r from-primary via-accent to-warning bg-clip-text text-transparent mb-3 tracking-tight">
-          Tiến độ học tập
-        </h1>
+        <h1 className="text-5xl font-bold bg-gradient-to-r from-primary via-accent to-warning bg-clip-text text-transparent mb-3 tracking-tight">Tiến độ học tập</h1>
         <p className="text-gray-600 text-lg">Theo dõi quá trình học tập của bạn</p>
       </div>
 
@@ -1360,7 +1695,7 @@ function ProgressPage() {
         <Card className="p-8 text-center bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
           <BookOpen className="w-12 h-12 mx-auto mb-3 text-blue-600" />
           <div className="text-4xl font-bold text-blue-600 mb-2">0</div>
-          <div className="text-gray-700 font-medium">Bài đã hoàn thành</div>
+          <div className="text-gray-700 font-medium">Ngày liên tiếp</div>
         </Card>
         <Card className="p-8 text-center bg-gradient-to-br from-green-50 to-green-100 border-green-200">
           <Trophy className="w-12 h-12 mx-auto mb-3 text-green-600" />
