@@ -50,6 +50,7 @@ export default function CoursesPage() {
     code: "",
     description: "",
     status: "open",
+    passThreshold: 80,
   });
 
   const { data: courses, isLoading } = useQuery<AdminCourse[]>({
@@ -78,13 +79,16 @@ export default function CoursesPage() {
         code: formState.code.trim(),
         description: formState.description.trim() || null,
         status: formState.status,
+        passThreshold: Number.isFinite(formState.passThreshold)
+          ? Math.min(100, Math.max(0, formState.passThreshold))
+          : 80,
       };
       return apiRequest("/api/admin/courses", "POST", payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/courses"] });
       toast({ title: "Course created", description: "Students can now apply to this course." });
-      setFormState({ name: "", code: "", description: "", status: "open" });
+      setFormState({ name: "", code: "", description: "", status: "open", passThreshold: 80 });
     },
     onError: (error: any) => {
       toast({
@@ -95,9 +99,9 @@ export default function CoursesPage() {
     },
   });
 
-  const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      return apiRequest(`/api/admin/courses/${id}`, "PATCH", { status });
+  const updateCourseMutation = useMutation({
+    mutationFn: async ({ id, status, passThreshold }: { id: string; status: string; passThreshold?: number }) => {
+      return apiRequest(`/api/admin/courses/${id}`, "PATCH", { status, passThreshold });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/courses"] });
@@ -172,7 +176,7 @@ export default function CoursesPage() {
               />
             </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-4">
             <div className="md:col-span-2">
               <label className="text-sm font-medium text-gray-700">Description</label>
               <Textarea
@@ -196,6 +200,21 @@ export default function CoursesPage() {
                   <SelectItem value="closed">Closed</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">Pass threshold (%)</label>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                value={formState.passThreshold}
+                onChange={(event) =>
+                  setFormState((prev) => ({
+                    ...prev,
+                    passThreshold: event.target.value ? parseInt(event.target.value, 10) : 0,
+                  }))
+                }
+              />
             </div>
           </div>
           <div className="flex justify-end">
@@ -222,6 +241,7 @@ export default function CoursesPage() {
                 <TableHead>Code</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Lessons</TableHead>
+                <TableHead>Pass %</TableHead>
                 <TableHead>Pending</TableHead>
                 <TableHead>Approved</TableHead>
                 <TableHead className="w-40">Actions</TableHead>
@@ -230,13 +250,13 @@ export default function CoursesPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10 text-gray-400">
+                  <TableCell colSpan={8} className="text-center py-10 text-gray-400">
                     Loading courses...
                   </TableCell>
                 </TableRow>
               ) : sortedCourses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10 text-gray-400">
+                  <TableCell colSpan={8} className="text-center py-10 text-gray-400">
                     No courses created yet.
                   </TableCell>
                 </TableRow>
@@ -254,7 +274,7 @@ export default function CoursesPage() {
                       <Select
                         value={course.status ?? "open"}
                         onValueChange={(value) =>
-                          updateStatusMutation.mutate({ id: course.id, status: value })
+                          updateCourseMutation.mutate({ id: course.id, status: value, passThreshold: course.passThreshold ?? 80 })
                         }
                       >
                         <SelectTrigger className="w-28">
@@ -270,6 +290,22 @@ export default function CoursesPage() {
                       <Badge variant="secondary" className="bg-slate-100 text-slate-700">
                         {course.lessonCount ?? 0}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-gray-600">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={course.passThreshold ?? 80}
+                        onChange={(event) =>
+                          updateCourseMutation.mutate({
+                            id: course.id,
+                            status: course.status ?? "open",
+                            passThreshold: event.target.value ? parseInt(event.target.value, 10) : 0,
+                          })
+                        }
+                        className="w-20"
+                      />
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className="bg-amber-100 text-amber-700">

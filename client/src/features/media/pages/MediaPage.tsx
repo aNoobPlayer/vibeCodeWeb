@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MediaUploadButton } from "@/components/MediaUpload";
@@ -8,8 +9,26 @@ import { Volume2, Image, FileAudio, Eye, Trash2 } from "lucide-react";
 
 export default function MediaPage() {
   const { mediaFiles } = useMediaLibrary();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const handleUploaded = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.media() });
+  };
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Delete this media file?")) return;
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/media/${id}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok && res.status !== 204) {
+        const message = await res.text().catch(() => "");
+        throw new Error(message || `Delete failed (${res.status})`);
+      }
+      queryClient.invalidateQueries({ queryKey: queryKeys.media() });
+    } catch (error) {
+      console.error(error);
+      window.alert(error instanceof Error ? error.message : "Delete failed");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -80,6 +99,8 @@ export default function MediaPage() {
                     size="sm"
                     className="text-destructive hover:text-destructive"
                     data-testid={`button-delete-media-${media.id}`}
+                    onClick={() => handleDelete(media.id)}
+                    disabled={deletingId === media.id}
                   >
                     <Trash2 className="w-3 h-3" />
                   </Button>

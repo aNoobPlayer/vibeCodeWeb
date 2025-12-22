@@ -50,6 +50,7 @@ export default function LessonsPage() {
   const [filterSkill, setFilterSkill] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCourse, setFilterCourse] = useState("all");
+  const [filterLevel, setFilterLevel] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [isLessonFormOpen, setIsLessonFormOpen] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
@@ -76,10 +77,11 @@ export default function LessonsPage() {
       if (filterSkill !== "all" && lesson.skill !== filterSkill) return false;
       if (filterStatus !== "all" && lesson.status !== filterStatus) return false;
       if (filterCourse !== "all" && String(lesson.courseId ?? "") !== filterCourse) return false;
+      if (filterLevel !== "all" && String(lesson.level ?? 1) !== filterLevel) return false;
       if (searchQuery && !lesson.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
       return true;
     });
-  }, [lessons, filterSkill, filterStatus, filterCourse, searchQuery]);
+  }, [lessons, filterSkill, filterStatus, filterCourse, filterLevel, searchQuery]);
 
   const testSetMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -195,6 +197,19 @@ export default function LessonsPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Select value={filterLevel} onValueChange={setFilterLevel}>
+              <SelectTrigger className="w-32" data-testid="filter-lesson-level">
+                <SelectValue placeholder="All levels" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All levels</SelectItem>
+                {[1, 2, 3, 4, 5].map((lvl) => (
+                  <SelectItem key={lvl} value={String(lvl)}>
+                    Level {lvl}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Input
               data-testid="input-search-lessons"
               placeholder="Search lessons..."
@@ -212,6 +227,7 @@ export default function LessonsPage() {
                 <TableHead className="w-16">#</TableHead>
                 <TableHead>Title</TableHead>
                 <TableHead>Course</TableHead>
+                <TableHead>Level</TableHead>
                 <TableHead>Skill</TableHead>
                 <TableHead>Test</TableHead>
                 <TableHead>Status</TableHead>
@@ -223,7 +239,7 @@ export default function LessonsPage() {
             <TableBody>
               {filteredLessons.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-12 text-gray-400">
+                  <TableCell colSpan={10} className="text-center py-12 text-gray-400">
                     <BookOpen className="w-10 h-10 mx-auto mb-3" />
                     <p>No lessons found</p>
                   </TableCell>
@@ -236,6 +252,7 @@ export default function LessonsPage() {
                     <TableCell className="text-sm text-gray-600">
                       {lesson.courseId ? courseMap.get(String(lesson.courseId)) ?? "Unknown" : "Unassigned"}
                     </TableCell>
+                    <TableCell className="text-sm text-gray-600">Level {lesson.level ?? 1}</TableCell>
                     <TableCell>
                       <Badge variant="secondary" className={badgeClassForSkill(lesson.skill)}>
                         {lesson.skill}
@@ -326,6 +343,9 @@ export default function LessonsPage() {
               <p className="text-sm text-gray-500">
                 Course: {courseMap.get(String(viewLesson.courseId)) ?? "Unknown"}
               </p>
+            )}
+            {viewLesson?.level && (
+              <p className="text-sm text-gray-500">Level: {viewLesson.level}</p>
             )}
             {viewLesson?.testSetId && (
               <p className="text-sm text-gray-500">

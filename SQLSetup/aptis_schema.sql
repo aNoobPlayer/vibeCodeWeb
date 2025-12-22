@@ -115,6 +115,7 @@ CREATE TABLE dbo.aptis_lessons (
   [status]  NVARCHAR(20)  NOT NULL DEFAULT N'draft', -- published/draft
   testSetId INT           NULL,
   courseId  INT           NULL,
+  [level]   INT           NOT NULL DEFAULT(1),
   durationMinutes INT     NULL,
   orderIndex INT          NULL,
   coverImageUrl NVARCHAR(1000) NULL,
@@ -151,6 +152,7 @@ CREATE TABLE dbo.aptis_classes (
   name      NVARCHAR(255) NOT NULL,
   [description] NVARCHAR(1000) NULL,
   [status]  NVARCHAR(20) NOT NULL DEFAULT N'open', -- open/closed
+  passThreshold INT NOT NULL DEFAULT(80),
   createdBy INT NULL,
   createdAt DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME(),
   CONSTRAINT CK_classes_status CHECK ([status] IN (N'open', N'closed')),

@@ -206,6 +206,35 @@ export default function ProfilePage() {
                   onChange={(e) => setFormState((prev) => ({ ...prev, avatar: e.target.value }))}
                   placeholder="https://example.com/avatar.png"
                 />
+                {formState.avatar?.trim() ? (
+                  <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
+                    <p className="text-xs uppercase tracking-wide text-gray-400 mb-2">Preview</p>
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-12 w-12">
+                        <AvatarImage src={formState.avatar} alt="Avatar preview" />
+                        <AvatarFallback>{formState.username?.charAt(0).toUpperCase() || "U"}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(formState.avatar, "_blank", "noopener,noreferrer")}
+                        >
+                          Open
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setFormState((prev) => ({ ...prev, avatar: "" }))}
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
             <div className="space-y-2">

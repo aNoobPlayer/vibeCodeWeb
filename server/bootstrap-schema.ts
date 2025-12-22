@@ -170,6 +170,7 @@ const tables: TableDefinition[] = [
           [status]  NVARCHAR(20)  NOT NULL DEFAULT N'draft',
           testSetId INT           NULL,
           courseId  INT           NULL,
+          [level]   INT           NOT NULL DEFAULT(1),
           durationMinutes INT     NULL,
           orderIndex INT          NULL,
           coverImageUrl NVARCHAR(1000) NULL,
@@ -197,6 +198,7 @@ const tables: TableDefinition[] = [
           name      NVARCHAR(255) NOT NULL,
           [description] NVARCHAR(1000) NULL,
           [status]  NVARCHAR(20) NOT NULL DEFAULT N'open',
+          passThreshold INT NOT NULL DEFAULT(80),
           createdBy INT NULL,
           createdAt DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME(),
           CONSTRAINT CK_classes_status CHECK ([status] IN (N'open', N'closed')),
@@ -252,6 +254,10 @@ const tables: TableDefinition[] = [
       BEGIN
         ALTER TABLE dbo.aptis_lessons ADD courseId INT NULL;
       END
+      IF OBJECT_ID('dbo.aptis_lessons', 'U') IS NOT NULL AND COL_LENGTH('dbo.aptis_lessons', 'level') IS NULL
+      BEGIN
+        ALTER TABLE dbo.aptis_lessons ADD [level] INT NOT NULL CONSTRAINT DF_aptis_lessons_level DEFAULT(1);
+      END
     `,
   },
   {
@@ -264,6 +270,10 @@ const tables: TableDefinition[] = [
       IF OBJECT_ID('dbo.aptis_classes', 'U') IS NOT NULL AND COL_LENGTH('dbo.aptis_classes', 'status') IS NULL
       BEGIN
         ALTER TABLE dbo.aptis_classes ADD [status] NVARCHAR(20) NOT NULL CONSTRAINT DF_aptis_classes_status DEFAULT N'open';
+      END
+      IF OBJECT_ID('dbo.aptis_classes', 'U') IS NOT NULL AND COL_LENGTH('dbo.aptis_classes', 'passThreshold') IS NULL
+      BEGIN
+        ALTER TABLE dbo.aptis_classes ADD passThreshold INT NOT NULL CONSTRAINT DF_aptis_classes_passThreshold DEFAULT(80);
       END
     `,
   },

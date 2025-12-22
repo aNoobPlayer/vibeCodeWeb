@@ -16,11 +16,17 @@ import { fromZodError } from "zod-validation-error";
 import { z } from "zod";
 import { query } from "./db";
 import multer from 'multer';
+import fs from "fs";
 import path from 'path';
 import * as XLSX from "xlsx";
-import { isR2Enabled, uploadBufferToR2, getR2PublicUrl, buildR2Key } from "./lib/r2";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { buildR2Key, getR2PublicUrl, isR2Enabled, r2Bucket, r2Client, uploadBufferToR2 } from "./lib/r2";
 
 const loginSchema = z.object({
+  username: z.string().min(1),
+  password: z.string().min(1),
+});
+const registerSchema = z.object({
   username: z.string().min(1),
   password: z.string().min(1),
 });
@@ -48,6 +54,7 @@ const courseSchema = z.object({
   code: z.string().min(2).max(50),
   description: z.string().optional().nullable(),
   status: z.enum(COURSE_STATUSES).optional(),
+  passThreshold: z.number().min(0).max(100).optional(),
 });
 const courseUpdateSchema = courseSchema.partial();
 const courseMemberStatusSchema = z.enum(COURSE_MEMBER_STATUSES);
@@ -112,6 +119,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (url.startsWith("/")) return `${getPublicBaseUrl(req)}${url}`;
     return url;
   };
+  const isR2Url = (url?: string | null) => {
+    if (!url) return false;
+    try {
+      const parsed = new URL(url);
+      const publicBase = process.env.R2_PUBLIC_URL ? new URL(process.env.R2_PUBLIC_URL) : null;
+      if (publicBase && parsed.host === publicBase.host) return true;
+      return parsed.host.endsWith(".r2.cloudflarestorage.com");
+    } catch {
+      return false;
+    }
+  };
+  const extractR2KeyFromUrl = (url: string) => {
+    const parsed = new URL(url);
+    let path = parsed.pathname.replace(/^\/+/, "");
+    if (r2Bucket && path.startsWith(`${r2Bucket}/`)) {
+      path = path.slice(r2Bucket.length + 1);
+    }
+    return path || null;
+  };
+  const resolveMediaUrl = (req: any, url?: string | null) => {
+    const resolved = resolvePublicUrl(req, url);
+    if (!resolved || !isR2Url(resolved)) return resolved;
+    const key = extractR2KeyFromUrl(resolved);
+    if (!key || !key.startsWith("media/")) return resolved;
+    return resolvePublicUrl(req, `/api/media/r2?key=${encodeURIComponent(key)}`);
+  };
+  const streamR2Object = async (key: string, res: any) => {
+    if (!r2Client || !r2Bucket) {
+      res.status(503).json({ error: "R2 is not configured" });
+      return;
+    }
+    const obj = await r2Client.send(new GetObjectCommand({ Bucket: r2Bucket, Key: key }));
+    if (obj.ContentType) res.setHeader("Content-Type", obj.ContentType);
+    if (obj.ContentLength != null) res.setHeader("Content-Length", String(obj.ContentLength));
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    const body: any = obj.Body;
+    if (body && typeof body.pipe === "function") {
+      body.pipe(res);
+      return;
+    }
+    if (body?.transformToByteArray) {
+      const bytes = await body.transformToByteArray();
+      res.send(Buffer.from(bytes));
+      return;
+    }
+    res.status(500).json({ error: "Empty media body" });
+  };
   // Health endpoint
   app.get("/api/health", async (_req, res) => {
     try {
@@ -152,6 +206,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       req.session.role = user.role;
 
       res.json({
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        avatar: user.avatar ?? null,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const result = registerSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: fromZodError(result.error).message });
+      }
+
+      const { username, password } = result.data;
+      const existing = await storage.getUserByUsername(username);
+      if (existing) {
+        return res.status(409).json({ error: "Username already exists" });
+      }
+
+      const user = await storage.createUser({ username, password, role: "student" });
+      req.session.userId = user.id;
+      req.session.username = user.username;
+      req.session.role = user.role;
+
+      res.status(201).json({
         id: user.id,
         username: user.username,
         role: user.role,
@@ -537,7 +619,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           content: r.stem,
           options: r.optionsJson ? JSON.parse(r.optionsJson) : [],
           correctAnswers: r.answerKey ? JSON.parse(r.answerKey) : [],
-          mediaUrl: resolvePublicUrl(req, r.mediaUrl ?? null),
+          mediaUrl: resolveMediaUrl(req, r.mediaUrl ?? null),
           explanation: r.explain ?? null,
         }));
 
@@ -570,7 +652,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const start = (page - 1) * size;
       const paged = list.slice(start, start + size).map((question) => ({
         ...question,
-        mediaUrl: resolvePublicUrl(req, question.mediaUrl ?? null),
+        mediaUrl: resolveMediaUrl(req, question.mediaUrl ?? null),
       }));
       const total = list.length;
 
@@ -616,7 +698,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json({
         ...question,
-        mediaUrl: resolvePublicUrl(req, question.mediaUrl ?? null),
+        mediaUrl: resolveMediaUrl(req, question.mediaUrl ?? null),
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -632,7 +714,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const question = await storage.createQuestion(result.data);
       res.status(201).json({
         ...question,
-        mediaUrl: resolvePublicUrl(req, question.mediaUrl ?? null),
+        mediaUrl: resolveMediaUrl(req, question.mediaUrl ?? null),
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -651,7 +733,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json({
         ...question,
-        mediaUrl: resolvePublicUrl(req, question.mediaUrl ?? null),
+        mediaUrl: resolveMediaUrl(req, question.mediaUrl ?? null),
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -971,24 +1053,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const userNum = parseInt(userId, 10);
         const result = await query(
           `
-          SELECT c.id, c.code, c.name, c.[description], c.[status], c.createdBy, c.createdAt,
-                 m.[status] AS enrollmentStatus
-          FROM dbo.aptis_classes c
-          LEFT JOIN dbo.aptis_class_members m ON m.classId = c.id AND m.userId = @p0
-          ORDER BY c.createdAt DESC
-          `,
+            SELECT c.id, c.code, c.name, c.[description], c.[status], c.passThreshold, c.createdBy, c.createdAt,
+                   m.[status] AS enrollmentStatus
+            FROM dbo.aptis_classes c
+            LEFT JOIN dbo.aptis_class_members m ON m.classId = c.id AND m.userId = @p0
+            ORDER BY c.createdAt DESC
+            `,
           [userNum],
         );
         const rows = (result.recordset || []).map((r: any) => ({
           id: String(r.id),
           code: r.code,
-          name: r.name,
-          description: r.description ?? null,
-          status: r.status ?? "open",
-          createdBy: r.createdBy ? String(r.createdBy) : null,
-          createdAt: r.createdAt ?? new Date(),
-          enrollmentStatus: r.enrollmentStatus ?? "none",
-        }));
+            name: r.name,
+            description: r.description ?? null,
+            status: r.status ?? "open",
+            passThreshold: r.passThreshold ?? 80,
+            createdBy: r.createdBy ? String(r.createdBy) : null,
+            createdAt: r.createdAt ?? new Date(),
+            enrollmentStatus: r.enrollmentStatus ?? "none",
+          }));
         return res.json(rows);
       }
 
@@ -1029,7 +1112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (process.env.DATABASE_URL) {
           const result = await query(
             `
-            SELECT c.id, c.code, c.name, c.[description], c.[status], c.createdBy, c.createdAt,
+            SELECT c.id, c.code, c.name, c.[description], c.[status], c.passThreshold, c.createdBy, c.createdAt,
                    (SELECT COUNT(*) FROM dbo.aptis_class_members m WHERE m.classId = c.id AND m.[status] = N'pending') AS pendingCount,
                    (SELECT COUNT(*) FROM dbo.aptis_class_members m WHERE m.classId = c.id AND m.[status] = N'approved') AS approvedCount,
                    (SELECT COUNT(*) FROM dbo.aptis_lessons l WHERE l.courseId = c.id) AS lessonCount
@@ -1044,6 +1127,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               name: r.name,
               description: r.description ?? null,
               status: r.status ?? "open",
+              passThreshold: r.passThreshold ?? 80,
               createdBy: r.createdBy ? String(r.createdBy) : null,
               createdAt: r.createdAt ?? new Date(),
               pendingCount: r.pendingCount ?? 0,
@@ -1194,7 +1278,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const media = await storage.getAllMedia();
       const resolved = media.map((item) => ({
         ...item,
-        url: resolvePublicUrl(req, item.url),
+        url: isR2Url(item.url) ? resolvePublicUrl(req, `/api/media/${item.id}/file`) : resolvePublicUrl(req, item.url),
       }));
       res.json(resolved);
     } catch (error: any) {
@@ -1210,8 +1294,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json({
         ...media,
-        url: resolvePublicUrl(req, media.url),
+        url: isR2Url(media.url) ? resolvePublicUrl(req, `/api/media/${media.id}/file`) : resolvePublicUrl(req, media.url),
       });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/media/:id/file", async (req, res) => {
+    try {
+      const media = await storage.getMedia(req.params.id);
+      if (!media?.url) {
+        return res.status(404).json({ error: "Media not found" });
+      }
+      const resolved = resolvePublicUrl(req, media.url);
+      if (!isR2Url(resolved)) {
+        return res.redirect(resolved);
+      }
+      const key = extractR2KeyFromUrl(resolved);
+      if (!key) {
+        return res.status(400).json({ error: "Invalid media key" });
+      }
+      if (!key.startsWith("media/")) {
+        return res.status(400).json({ error: "Invalid media key" });
+      }
+      await streamR2Object(key, res);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/media/r2", async (req, res) => {
+    try {
+      const key = String(req.query.key || "");
+      if (!key || !key.startsWith("media/")) {
+        return res.status(400).json({ error: "Invalid media key" });
+      }
+      await streamR2Object(key, res);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -1287,7 +1406,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           options: row.optionsJson ? JSON.parse(row.optionsJson) : [],
           correctAnswers: row.answerKey ? JSON.parse(row.answerKey) : [],
           explanation: row.explain ?? null,
-          mediaUrl: resolvePublicUrl(req, row.mediaUrl ?? null),
+          mediaUrl: resolveMediaUrl(req, row.mediaUrl ?? null),
           points: 1,
           tags: [],
         },
@@ -1676,48 +1795,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     a.forEach((x) => { if (!b.has(x)) ok = false; });
     return ok;
   }
+  function resolveMediaType(mimetype: string, originalname: string): "audio" | "image" | "video" | "file" {
+    const lower = originalname.toLowerCase();
+    if (mimetype.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lower)) return "image";
+    if (mimetype.startsWith("audio/") || /\.(mp3|wav|ogg|m4a|aac|flac)$/.test(lower)) return "audio";
+    if (mimetype.startsWith("video/") || /\.(mp4|mov|webm|mkv|avi)$/.test(lower)) return "video";
+    return "file";
+  }
 
   // ===================== Admin: Media Upload & Attach =====================
   app.post('/api/admin/media/upload', requireAdmin, upload.single('file'), async (req: any, res) => {
     try {
       if (!req.file) return res.status(400).json({ error: 'Missing file' });
       const { originalname, mimetype, filename, size } = req.file;
-      const safe = originalname.replace(/[^a-zA-Z0-9_.-]/g, '_');
+      const safe = originalname.replace(/[^a-zA-Z0-9_.-]/g, "_");
       const generatedName = `${Date.now()}_${safe}`;
-      const type = mimetype.startsWith('audio')
-        ? 'audio'
-        : mimetype.startsWith('image')
-          ? 'image'
-          : mimetype.startsWith('video')
-            ? 'video'
-            : mimetype === 'application/pdf'
-              ? 'pdf'
-              : 'file';
+      const type = resolveMediaType(mimetype, originalname);
+      if (type === "file") {
+        return res.status(400).json({ error: "Unsupported media type. Please upload image, audio, or video files." });
+      }
 
       let url: string;
       let r2Key: string | undefined;
       if (isR2Enabled) {
         if (!req.file.buffer) throw new Error("Upload buffer missing");
         r2Key = buildR2Key(originalname, mimetype);
-        await uploadBufferToR2({
-          key: r2Key,
-          body: req.file.buffer,
-          contentType: mimetype,
-        });
-        url = getR2PublicUrl(r2Key);
+        try {
+          await uploadBufferToR2({
+            key: r2Key,
+            body: req.file.buffer,
+            contentType: mimetype,
+          });
+          url = getR2PublicUrl(r2Key);
+        } catch (err) {
+          const fallbackPath = path.join(uploadDir, generatedName);
+          await fs.promises.writeFile(fallbackPath, req.file.buffer);
+          url = resolvePublicUrl(req, `/uploads/${generatedName}`);
+        }
       } else {
-        url = resolvePublicUrl(req, `/uploads/${filename}`);
+        url = resolvePublicUrl(req, `/uploads/${filename ?? generatedName}`);
       }
 
       if (process.env.DATABASE_URL) {
         const ins = await query(
           `INSERT INTO dbo.aptis_media(name, [type], url, [size]) OUTPUT INSERTED.id VALUES(@p0, @p1, @p2, @p3)`,
-          [originalname, type, url, size],
+          [originalname, type, url, size ?? null],
         );
-        return res.status(201).json({ id: String(ins.recordset[0].id), filename: originalname, type, url, size });
+        const createdId = String(ins.recordset[0].id);
+        const responseUrl = isR2Url(url) ? resolvePublicUrl(req, `/api/media/${createdId}/file`) : url;
+        return res.status(201).json({ id: createdId, filename: originalname, type, url: responseUrl, size });
       } else {
-        const fallbackId = isR2Enabled && r2Key ? r2Key : filename;
-        return res.status(201).json({ id: fallbackId, filename: originalname, type, url, size });
+        const created = await storage.createMedia({ filename: originalname, type, url });
+        const responseUrl = isR2Url(url) ? resolvePublicUrl(req, `/api/media/${created.id}/file`) : url;
+        return res.status(201).json({ id: created.id, filename: originalname, type, url: responseUrl, size });
       }
     } catch (error: any) {
       res.status(500).json({ error: error.message });

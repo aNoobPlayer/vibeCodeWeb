@@ -101,6 +101,7 @@ model Lesson {
   status          String    @default("draft") @db.NVarChar(20)
   testSetId       Int?
   courseId        Int?
+  level           Int       @default(1)
   durationMinutes Int?
   orderIndex      Int?
   coverImageUrl   String?   @db.NVarChar(1000)
@@ -121,6 +122,7 @@ model Course {
   name        String         @db.NVarChar(255)
   description String?        @db.NVarChar(1000)
   status      String         @default("open") @db.NVarChar(20)
+  passThreshold Int          @default(80)
   createdBy   Int?
   createdAt   DateTime       @default(now())
   members     CourseMember[]

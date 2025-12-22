@@ -96,6 +96,7 @@ export const lessons = pgTable("lessons", {
   practicePrompts: text("practice_prompts").array(),
   testSetId: text("test_set_id"),
   courseId: text("course_id"),
+  level: integer("level").notNull().default(1),
   durationMinutes: integer("duration_minutes"),
   orderIndex: integer("order_index"),
   coverImageUrl: text("cover_image_url"),
@@ -120,6 +121,7 @@ export const courses = pgTable("courses", {
   name: text("name").notNull(),
   description: text("description"),
   status: text("status").notNull().default("open"), // open, closed
+  passThreshold: integer("pass_threshold").notNull().default(80),
   createdBy: text("created_by"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

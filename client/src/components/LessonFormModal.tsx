@@ -89,6 +89,7 @@ export function LessonFormModal({ open, onOpenChange, lesson }: LessonFormModalP
       practicePrompts: lesson?.practicePrompts ?? [],
       testSetId: lesson?.testSetId ?? "",
       courseId: lesson?.courseId ?? "",
+      level: lesson?.level ?? 1,
       content: lesson?.content ?? "",
       durationMinutes: lesson?.durationMinutes ?? null,
       orderIndex: lesson?.orderIndex ?? null,
@@ -109,6 +110,7 @@ export function LessonFormModal({ open, onOpenChange, lesson }: LessonFormModalP
         practicePrompts: lesson?.practicePrompts ?? [],
         testSetId: lesson?.testSetId ?? "",
         courseId: lesson?.courseId ?? "",
+        level: lesson?.level ?? 1,
         content: lesson?.content ?? "",
         durationMinutes: lesson?.durationMinutes ?? null,
         orderIndex: lesson?.orderIndex ?? null,
@@ -168,6 +170,7 @@ export function LessonFormModal({ open, onOpenChange, lesson }: LessonFormModalP
   const previewContent = form.watch("content");
   const previewTestSetId = form.watch("testSetId");
   const previewCourseId = form.watch("courseId");
+  const previewLevel = form.watch("level");
   const previewTestSetLabel = previewTestSetId
     ? testSetMap.get(String(previewTestSetId)) ?? null
     : null;
@@ -261,6 +264,35 @@ export function LessonFormModal({ open, onOpenChange, lesson }: LessonFormModalP
                         </SelectContent>
                       </Select>
                       <FormDescription>Group lessons under a course for easier management.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="level"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Level</FormLabel>
+                      <Select
+                        value={String(field.value ?? 1)}
+                        onValueChange={(value) => field.onChange(parseInt(value, 10))}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select level" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {[1, 2, 3, 4, 5].map((lvl) => (
+                            <SelectItem key={lvl} value={String(lvl)}>
+                              Level {lvl}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>Controls lesson progression requirements.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -539,6 +571,7 @@ export function LessonFormModal({ open, onOpenChange, lesson }: LessonFormModalP
                   content={previewContent}
                   testSetLabel={previewTestSetLabel}
                   courseLabel={previewCourseLabel}
+                  level={previewLevel}
                 />
               </div>
             </div>
@@ -572,6 +605,7 @@ type LessonPreviewProps = {
   content?: string | null;
   testSetLabel?: string | null;
   courseLabel?: string | null;
+  level?: number | null;
 };
 
 function LessonLivePreview({
@@ -588,6 +622,7 @@ function LessonLivePreview({
   content,
   testSetLabel,
   courseLabel,
+  level,
 }: LessonPreviewProps) {
   const safeOutcomes = (outcomes ?? []).filter((item) => item && item.trim());
   const safeKeyPoints = (keyPoints ?? []).filter((item) => item && item.trim());
@@ -616,6 +651,9 @@ function LessonLivePreview({
         </span>
         <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1">
           {durationMinutes ? `${durationMinutes} min` : "Self-paced"}
+        </span>
+        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1">
+          Level {level ?? 1}
         </span>
         {courseLabel && (
           <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2 py-1 text-emerald-200">

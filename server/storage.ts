@@ -701,6 +701,7 @@ export class MemStorage implements IStorage {
       practicePrompts: insertLesson.practicePrompts ?? [],
       testSetId: insertLesson.testSetId ?? null,
       courseId: insertLesson.courseId ?? null,
+      level: insertLesson.level ?? 1,
       durationMinutes: insertLesson.durationMinutes ?? null,
       orderIndex: insertLesson.orderIndex ?? null,
       coverImageUrl: insertLesson.coverImageUrl ?? null,
@@ -773,6 +774,7 @@ export class MemStorage implements IStorage {
       id,
       description: insertCourse.description ?? null,
       status: insertCourse.status ?? "open",
+      passThreshold: insertCourse.passThreshold ?? 80,
       createdBy: insertCourse.createdBy ?? null,
       createdAt: now,
     } as Course;
@@ -795,6 +797,7 @@ export class MemStorage implements IStorage {
       ...update,
       description: update.description ?? existing.description,
       status: update.status ?? existing.status,
+      passThreshold: update.passThreshold ?? existing.passThreshold ?? 80,
     } as Course;
     this.courses.set(id, updated);
 
@@ -1434,7 +1437,7 @@ class SqlStorage implements IStorage {
   // Lessons
   async getAllLessons(): Promise<Lesson[]> {
     const result = await query(`
-      SELECT id, title, [description], skill, content, [status], testSetId, courseId,
+      SELECT id, title, [description], skill, content, [status], testSetId, courseId, [level],
              outcomesJson, keyPointsJson, practicePromptsJson,
              durationMinutes, orderIndex, coverImageUrl, youtubeUrl, createdAt, updatedAt
       FROM dbo.aptis_lessons
@@ -1449,6 +1452,7 @@ class SqlStorage implements IStorage {
         content: r.content,
         testSetId: r.testSetId ? String(r.testSetId) : null,
         courseId: r.courseId ? String(r.courseId) : null,
+        level: r.level ?? 1,
         outcomes: safeParseJsonArray(r.outcomesJson),
         keyPoints: safeParseJsonArray(r.keyPointsJson),
         practicePrompts: safeParseJsonArray(r.practicePromptsJson),
@@ -1464,7 +1468,7 @@ class SqlStorage implements IStorage {
   async getLesson(id: string): Promise<Lesson | undefined> {
     const idNum = parseInt(id, 10);
     const result = await query(
-      `SELECT id, title, [description], skill, content, [status], testSetId, courseId,
+      `SELECT id, title, [description], skill, content, [status], testSetId, courseId, [level],
               outcomesJson, keyPointsJson, practicePromptsJson,
               durationMinutes, orderIndex, coverImageUrl, youtubeUrl, createdAt, updatedAt
        FROM dbo.aptis_lessons
@@ -1482,6 +1486,7 @@ class SqlStorage implements IStorage {
         content: r.content,
         testSetId: r.testSetId ? String(r.testSetId) : null,
         courseId: r.courseId ? String(r.courseId) : null,
+        level: r.level ?? 1,
         outcomes: safeParseJsonArray(r.outcomesJson),
         keyPoints: safeParseJsonArray(r.keyPointsJson),
         practicePrompts: safeParseJsonArray(r.practicePromptsJson),
@@ -1496,9 +1501,9 @@ class SqlStorage implements IStorage {
 
   async createLesson(lesson: InsertLesson): Promise<Lesson> {
     const result = await query(
-      `INSERT INTO dbo.aptis_lessons(title, [description], skill, content, [status], testSetId, courseId, outcomesJson, keyPointsJson, practicePromptsJson, durationMinutes, orderIndex, coverImageUrl, youtubeUrl)
+      `INSERT INTO dbo.aptis_lessons(title, [description], skill, content, [status], testSetId, courseId, [level], outcomesJson, keyPointsJson, practicePromptsJson, durationMinutes, orderIndex, coverImageUrl, youtubeUrl)
        OUTPUT INSERTED.id
-       VALUES(@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, @p10, @p11, @p12, @p13)`,
+       VALUES(@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, @p10, @p11, @p12, @p13, @p14)`,
       [
         lesson.title,
         lesson.description ?? null,
@@ -1507,6 +1512,7 @@ class SqlStorage implements IStorage {
         lesson.status ?? "draft",
         lesson.testSetId ? parseInt(String(lesson.testSetId), 10) : null,
         lesson.courseId ? parseInt(String(lesson.courseId), 10) : null,
+        lesson.level ?? 1,
         lesson.outcomes ? JSON.stringify(lesson.outcomes) : null,
         lesson.keyPoints ? JSON.stringify(lesson.keyPoints) : null,
         lesson.practicePrompts ? JSON.stringify(lesson.practicePrompts) : null,
@@ -1533,6 +1539,7 @@ class SqlStorage implements IStorage {
       if (lesson.status !== undefined) { fields.push('[status] = @p' + params.length); params.push(lesson.status); }
       if (lesson.testSetId !== undefined) { fields.push('testSetId = @p' + params.length); params.push(lesson.testSetId ? parseInt(String(lesson.testSetId), 10) : null); }
       if (lesson.courseId !== undefined) { fields.push('courseId = @p' + params.length); params.push(lesson.courseId ? parseInt(String(lesson.courseId), 10) : null); }
+      if (lesson.level !== undefined) { fields.push('[level] = @p' + params.length); params.push(lesson.level); }
       if (lesson.outcomes !== undefined) { fields.push('outcomesJson = @p' + params.length); params.push(lesson.outcomes ? JSON.stringify(lesson.outcomes) : null); }
     if (lesson.keyPoints !== undefined) { fields.push('keyPointsJson = @p' + params.length); params.push(lesson.keyPoints ? JSON.stringify(lesson.keyPoints) : null); }
     if (lesson.practicePrompts !== undefined) { fields.push('practicePromptsJson = @p' + params.length); params.push(lesson.practicePrompts ? JSON.stringify(lesson.practicePrompts) : null); }
@@ -1556,7 +1563,7 @@ class SqlStorage implements IStorage {
   // Courses
   async getAllCourses(): Promise<Course[]> {
     const result = await query(`
-      SELECT id, code, name, [description], [status], createdBy, createdAt
+      SELECT id, code, name, [description], [status], passThreshold, createdBy, createdAt
       FROM dbo.aptis_classes
       ORDER BY createdAt DESC
     `);
@@ -1566,6 +1573,7 @@ class SqlStorage implements IStorage {
       name: r.name,
       description: r.description ?? null,
       status: r.status ?? "open",
+      passThreshold: r.passThreshold ?? 80,
       createdBy: r.createdBy ? String(r.createdBy) : null,
       createdAt: r.createdAt ?? new Date(),
     } as Course));
@@ -1574,7 +1582,7 @@ class SqlStorage implements IStorage {
   async getCourse(id: string): Promise<Course | undefined> {
     const idNum = parseInt(id, 10);
     const result = await query(
-      `SELECT id, code, name, [description], [status], createdBy, createdAt FROM dbo.aptis_classes WHERE id = @p0`,
+      `SELECT id, code, name, [description], [status], passThreshold, createdBy, createdAt FROM dbo.aptis_classes WHERE id = @p0`,
       [idNum],
     );
     const r = result.recordset?.[0];
@@ -1585,6 +1593,7 @@ class SqlStorage implements IStorage {
       name: r.name,
       description: r.description ?? null,
       status: r.status ?? "open",
+      passThreshold: r.passThreshold ?? 80,
       createdBy: r.createdBy ? String(r.createdBy) : null,
       createdAt: r.createdAt ?? new Date(),
     } as Course;
@@ -1592,14 +1601,15 @@ class SqlStorage implements IStorage {
 
   async createCourse(course: InsertCourse): Promise<Course> {
     const result = await query(
-      `INSERT INTO dbo.aptis_classes(code, name, [description], [status], createdBy)
+      `INSERT INTO dbo.aptis_classes(code, name, [description], [status], passThreshold, createdBy)
        OUTPUT INSERTED.id
-       VALUES(@p0, @p1, @p2, @p3, @p4)`,
+       VALUES(@p0, @p1, @p2, @p3, @p4, @p5)`,
       [
         course.code,
         course.name,
         course.description ?? null,
         course.status ?? "open",
+        course.passThreshold ?? 80,
         course.createdBy ? parseInt(String(course.createdBy), 10) : null,
       ],
     );
@@ -1617,6 +1627,7 @@ class SqlStorage implements IStorage {
     if (course.name !== undefined) { fields.push('name = @p' + params.length); params.push(course.name); }
     if (course.description !== undefined) { fields.push('[description] = @p' + params.length); params.push(course.description); }
     if (course.status !== undefined) { fields.push('[status] = @p' + params.length); params.push(course.status); }
+    if (course.passThreshold !== undefined) { fields.push('passThreshold = @p' + params.length); params.push(course.passThreshold); }
     if (fields.length === 0) return this.getCourse(id);
     const setClause = fields.join(', ');
     await query(`UPDATE dbo.aptis_classes SET ${setClause} WHERE id = @p${params.length}`, [...params, idNum]);

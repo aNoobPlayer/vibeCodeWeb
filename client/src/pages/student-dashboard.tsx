@@ -40,6 +40,14 @@ import {
   Sparkles,
 } from "lucide-react";
 import type { Activity, Course, Lesson, TestSet, Tip } from "@shared/schema";
+
+type TestResult = {
+  setId: number;
+  totalQuestions?: number | null;
+  correctAnswers?: number | null;
+  score?: number | null;
+  createdAt?: string | Date;
+};
 import { useLocation } from "wouter";
 import { getYouTubeEmbedUrl } from "@/lib/youtube";
 
@@ -69,7 +77,7 @@ export default function StudentDashboard() {
             <div className="text-sm text-white/90 mb-1">Trang hiện tại</div>
             <div className="font-semibold text-lg">
               {currentPage === "practice"
-                ? "Luyện tập"
+                ? "Bài học"
                 : currentPage === "courses"
                   ? "Courses"
                   : currentPage === "tips"
@@ -93,7 +101,7 @@ export default function StudentDashboard() {
                   : "hover:bg-white/10 hover:translate-x-2"
               }`}
             >
-              <span className="font-medium">Luyện tập</span>
+              <span className="font-medium">Bài học</span>
               <span className="text-lg">→</span>
             </Button>
             <Button
@@ -374,7 +382,6 @@ function PracticePage({ searchQuery }: { searchQuery: string }) {
   const { data: testSets } = useQuery<TestSet[]>({
     queryKey: ["/api/test-sets"],
   });
-
   const filteredSets = testSets?.filter((set) => {
     if (set.status !== "published") return false;
     if (activeSkill !== "all" && set.skill !== activeSkill) return false;
@@ -596,6 +603,10 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
     queryKey: ["/api/test-sets"],
   });
 
+  const { data: results } = useQuery<TestResult[]>({
+    queryKey: ["/api/results/me"],
+  });
+
   const testSetMap = useMemo(() => {
     const map = new Map<string, string>();
     (testSets ?? []).forEach((set) => {
@@ -603,6 +614,20 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
     });
     return map;
   }, [testSets]);
+
+  const bestScoresBySet = useMemo(() => {
+    const map = new Map<string, number>();
+    (results ?? []).forEach((result) => {
+      const total = result.totalQuestions ?? 0;
+      if (!total) return;
+      const correct = result.correctAnswers ?? 0;
+      const percent = Math.round((correct / total) * 100);
+      const setId = String(result.setId);
+      const prev = map.get(setId) ?? 0;
+      if (percent > prev) map.set(setId, percent);
+    });
+    return map;
+  }, [results]);
 
   const filteredLessons = lessons?.filter((lesson) => {
     if (lesson.status !== "published") return false;
@@ -619,20 +644,75 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
     });
   }, [filteredLessons]);
 
+  const lessonsByLevel = useMemo(() => {
+    const map = new Map<number, Lesson[]>();
+    (sortedLessons ?? []).forEach((lesson) => {
+      const level = lesson.level ?? 1;
+      if (!map.has(level)) map.set(level, []);
+      map.get(level)?.push(lesson);
+    });
+    return map;
+  }, [sortedLessons]);
+
+  const passThreshold = activeCourse?.passThreshold ?? 80;
+  const completionByLevel = useMemo(() => {
+    const map = new Map<number, { percent: number; totalTests: number; passedTests: number }>();
+    lessonsByLevel.forEach((lessons, level) => {
+      const tests = lessons.filter((lesson) => lesson.testSetId);
+      if (tests.length === 0) {
+        map.set(level, { percent: 100, totalTests: 0, passedTests: 0 });
+        return;
+      }
+      const passed = tests.filter((lesson) => {
+        const best = bestScoresBySet.get(String(lesson.testSetId)) ?? 0;
+        return best >= passThreshold;
+      }).length;
+      const percent = Math.round((passed / tests.length) * 100);
+      map.set(level, { percent, totalTests: tests.length, passedTests: passed });
+    });
+    return map;
+  }, [bestScoresBySet, lessonsByLevel, passThreshold]);
+
+  const unlockedLevel = useMemo(() => {
+    const levels = Array.from(lessonsByLevel.keys()).sort((a, b) => a - b);
+    if (levels.length === 0) return 1;
+    let maxUnlocked = levels[0];
+    for (const level of levels) {
+      if (level === levels[0]) {
+        maxUnlocked = level;
+        continue;
+      }
+      const prev = level - 1;
+      const completion = completionByLevel.get(prev)?.percent ?? 0;
+      if (completion >= 80) {
+        maxUnlocked = level;
+      } else {
+        break;
+      }
+    }
+    return maxUnlocked;
+  }, [completionByLevel, lessonsByLevel]);
+
   useEffect(() => {
     if (sortedLessons.length === 0) {
       if (selectedLesson) setSelectedLesson(null);
       return;
     }
+    const eligible = sortedLessons.filter((lesson) => (lesson.level ?? 1) <= unlockedLevel);
+    const nextLesson = eligible[0] ?? sortedLessons[0];
     if (!selectedLesson || !sortedLessons.some((lesson) => lesson.id === selectedLesson.id)) {
-      setSelectedLesson(sortedLessons[0]);
+      setSelectedLesson(nextLesson);
     }
-  }, [sortedLessons, selectedLesson]);
+  }, [sortedLessons, selectedLesson, unlockedLevel]);
 
+  const eligibleLessons = useMemo(
+    () => sortedLessons.filter((lesson) => (lesson.level ?? 1) <= unlockedLevel),
+    [sortedLessons, unlockedLevel],
+  );
   const activeLesson =
-    sortedLessons.find((lesson) => lesson.id === selectedLesson?.id) ?? sortedLessons[0] ?? null;
+    eligibleLessons.find((lesson) => lesson.id === selectedLesson?.id) ?? eligibleLessons[0] ?? null;
   const activeLessonIndex = activeLesson
-    ? sortedLessons.findIndex((lesson) => lesson.id === activeLesson.id)
+    ? eligibleLessons.findIndex((lesson) => lesson.id === activeLesson.id)
     : -1;
   const activeLessonVideo = getYouTubeEmbedUrl(activeLesson?.youtubeUrl ?? null);
   const activeOutcomes = (activeLesson?.outcomes ?? []).filter((item) => item && item.trim());
@@ -646,12 +726,12 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
     [sortedLessons],
   );
   const progressPercent =
-    sortedLessons.length > 0 && activeLessonIndex >= 0
-      ? Math.round(((activeLessonIndex + 1) / sortedLessons.length) * 100)
+    eligibleLessons.length > 0 && activeLessonIndex >= 0
+      ? Math.round(((activeLessonIndex + 1) / eligibleLessons.length) * 100)
       : 0;
   const progressLabel =
-    sortedLessons.length > 0
-      ? `${Math.max(1, activeLessonIndex + 1)} / ${sortedLessons.length}`
+    eligibleLessons.length > 0
+      ? `${Math.max(1, activeLessonIndex + 1)} / ${eligibleLessons.length}`
       : "0 / 0";
   const totalDurationLabel = totalDuration > 0 ? `${totalDuration} min total` : "Self-paced";
   const canGoPrev = activeLessonIndex > 0;
@@ -854,6 +934,19 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
                 <div className="mt-2">
                   <Progress value={progressPercent} className="h-2" />
                 </div>
+                {lessonsByLevel.size > 0 && (
+                  <p className="mt-2 text-xs text-gray-500">
+                    {lessonsByLevel.has(unlockedLevel + 1)
+                      ? completionByLevel.get(unlockedLevel)?.totalTests
+                        ? `Complete Level ${unlockedLevel} tests at ${passThreshold}% to unlock Level ${
+                            unlockedLevel + 1
+                          }. Current: ${completionByLevel.get(unlockedLevel)?.percent ?? 0}%`
+                        : `Level ${unlockedLevel} has no tests. You can move on to Level ${
+                            unlockedLevel + 1
+                          }.`
+                      : "All available levels are unlocked."}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -940,13 +1033,19 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
                       <div className="mt-4 max-h-[520px] scroll-ghost overflow-y-auto space-y-2 pr-1">
                         {sortedLessons.map((lesson, index) => {
                           const isActive = activeLesson?.id === lesson.id;
+                          const level = lesson.level ?? 1;
+                          const isLocked = level > unlockedLevel;
                           return (
                             <button
                               key={lesson.id}
                               data-testid={`lesson-card-${lesson.id}`}
-                              onClick={() => setSelectedLesson(lesson)}
+                              onClick={() => {
+                                if (!isLocked) setSelectedLesson(lesson);
+                              }}
                               className={`w-full rounded-2xl border px-4 py-3 text-left transition-all ${
-                                isActive
+                                isLocked
+                                  ? "border-dashed border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
+                                  : isActive
                                   ? "border-primary/30 bg-primary/10 shadow-md"
                                   : "border-white/70 bg-white/70 hover:bg-white"
                               }`}
@@ -954,7 +1053,9 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
                               <div className="flex items-start gap-3">
                                 <div
                                   className={`flex h-10 w-10 items-center justify-center rounded-xl text-sm font-semibold ${
-                                    isActive ? "bg-primary text-white" : "bg-gray-100 text-gray-600"
+                                    isActive && !isLocked
+                                      ? "bg-primary text-white"
+                                      : "bg-gray-100 text-gray-600"
                                   }`}
                                 >
                                   {String(index + 1).padStart(2, "0")}
@@ -963,7 +1064,7 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
                                   <div className="flex items-start justify-between gap-3">
                                     <p
                                       className={`text-sm font-semibold ${
-                                        isActive ? "text-primary" : "text-gray-900"
+                                        isActive && !isLocked ? "text-primary" : "text-gray-900"
                                       }`}
                                     >
                                       {lesson.title}
@@ -979,6 +1080,9 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
                                   </p>
                                   <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-gray-500">
                                     <span className="rounded-full bg-white/80 px-2 py-0.5">
+                                      Level {level}
+                                    </span>
+                                    <span className="rounded-full bg-white/80 px-2 py-0.5">
                                       {skillLabels[lesson.skill] ?? lesson.skill}
                                     </span>
                                     <span className="rounded-full bg-white/80 px-2 py-0.5">
@@ -986,11 +1090,15 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
                                     </span>
                                   </div>
                                 </div>
-                                {isActive && (
+                                {isLocked ? (
+                                  <span className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                                    Locked
+                                  </span>
+                                ) : isActive ? (
                                   <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-primary">
                                     Now
                                   </span>
-                                )}
+                                ) : null}
                               </div>
                             </button>
                           );
@@ -1029,6 +1137,9 @@ function CoursesPage({ searchQuery }: { searchQuery: string }) {
                         </div>
                         <div className="mt-4 flex flex-wrap gap-2 text-xs text-gray-500">
                           <span className="rounded-full bg-gray-100 px-2 py-1">Lesson {progressLabel}</span>
+                          <span className="rounded-full bg-gray-100 px-2 py-1">
+                            Level {activeLesson.level ?? 1}
+                          </span>
                           <span className="rounded-full bg-gray-100 px-2 py-1">
                             {activeLesson.durationMinutes ? `${activeLesson.durationMinutes} min` : "Self-paced"}
                           </span>

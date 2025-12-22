@@ -54,12 +54,14 @@ const floatingAuras = [
 type FocusField = "username" | "password" | null;
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, register } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<FocusField>(null);
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const isRegistering = mode === "register";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,9 +69,13 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await login(username, password);
+      if (isRegistering) {
+        await register(username, password);
+      } else {
+        await login(username, password);
+      }
     } catch (err: any) {
-      setError(err.message || "Login failed. Please try again.");
+      setError(err.message || (isRegistering ? "Registration failed. Please try again." : "Login failed. Please try again."));
     } finally {
       setLoading(false);
     }
@@ -205,9 +211,13 @@ export default function Login() {
                   <Shield className="h-5 w-5 text-slate-400" />
                 </div>
                 <div className="space-y-2">
-                  <CardTitle className="text-3xl font-bold text-slate-900">Welcome back</CardTitle>
+                  <CardTitle className="text-3xl font-bold text-slate-900">
+                    {isRegistering ? "Create account" : "Welcome back"}
+                  </CardTitle>
                   <CardDescription className="text-base text-slate-500">
-                    Sign in to orchestrate authoring, media, and grading in a single flow.
+                    {isRegistering
+                      ? "Register a student account to start learning with Aptis Keys."
+                      : "Sign in to orchestrate authoring, media, and grading in a single flow."}
                   </CardDescription>
                 </div>
               </CardHeader>
@@ -284,24 +294,38 @@ export default function Login() {
                     )}
                   </AnimatePresence>
 
-                  <Button
-                    type="submit"
-                    data-testid="button-login"
-                    className="w-full rounded-2xl bg-gradient-to-r from-primary via-indigo-500 to-blue-500 py-6 text-base font-semibold shadow-lg shadow-primary/30 transition hover:translate-y-0.5 hover:shadow-primary/40"
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Signing in...
-                      </>
-                    ) : (
-                      <>
-                        <LogIn className="mr-2 h-4 w-4" />
-                        Sign in
-                      </>
-                    )}
-                  </Button>
+                  <div className="space-y-3">
+                    <Button
+                      type="submit"
+                      data-testid="button-login"
+                      className="w-full rounded-2xl bg-gradient-to-r from-primary via-indigo-500 to-blue-500 py-6 text-base font-semibold shadow-lg shadow-primary/30 transition hover:translate-y-0.5 hover:shadow-primary/40"
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          {isRegistering ? "Creating account..." : "Signing in..."}
+                        </>
+                      ) : (
+                        <>
+                          <LogIn className="mr-2 h-4 w-4" />
+                          {isRegistering ? "Create account" : "Sign in"}
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full rounded-2xl border-slate-200 py-5 text-sm font-semibold text-slate-600 hover:text-slate-900"
+                      onClick={() => {
+                        setMode(isRegistering ? "login" : "register");
+                        setError("");
+                      }}
+                      disabled={loading}
+                    >
+                      {isRegistering ? "Already have an account? Sign in" : "Create a student account"}
+                    </Button>
+                  </div>
                 </form>
 
                 <motion.div

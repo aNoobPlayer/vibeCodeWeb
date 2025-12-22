@@ -12,6 +12,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
+  register: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<User | null>;
 }
@@ -85,6 +86,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const register = async (username: string, password: string) => {
+    setLoading(true);
+    const response = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ username, password }),
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || "Registration failed");
+    }
+
+    await response.json().catch(() => null);
+    const userData = await checkAuth();
+    if (!userData) {
+      throw new Error("Unable to verify registration. Please try again.");
+    }
+
+    if (userData.role === "admin") {
+      setLocation("/admin");
+    } else {
+      setLocation("/student");
+    }
+  };
+
   const logout = async () => {
     await fetch("/api/auth/logout", {
       method: "POST",
@@ -96,7 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refresh: checkAuth }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refresh: checkAuth }}>
       {children}
     </AuthContext.Provider>
   );
