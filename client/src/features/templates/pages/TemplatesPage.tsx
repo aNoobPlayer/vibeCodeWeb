@@ -14,6 +14,45 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { queryKeys } from "@/lib/queryKeys";
 import { Sparkles, Plus, Loader2 } from "lucide-react";
 
+type TemplateOptionValue = string | { key?: string; text?: string };
+
+type NormalizedTemplateOption = {
+  value: string;
+  label: string;
+  key: string;
+};
+
+function normalizeTemplateOptions(options?: TemplateOptionValue[] | null): NormalizedTemplateOption[] {
+  if (!Array.isArray(options)) return [];
+  return options
+    .map((option, index) => {
+      if (typeof option === "string") {
+        const fallbackKey = option || `option-${index}`;
+        return { value: option, label: option, key: fallbackKey };
+      }
+      const text = typeof option?.text === "string" ? option.text : "";
+      const key = typeof option?.key === "string" ? option.key : "";
+      const label = text || key;
+      const value = key || text;
+      const optionKey = key || text || `option-${index}`;
+      if (!label && !value) return null;
+      return { value, label, key: optionKey };
+    })
+    .filter((option): option is NormalizedTemplateOption => Boolean(option));
+}
+
+function normalizeTemplateAnswers(answers?: TemplateOptionValue[] | null): string[] {
+  if (!Array.isArray(answers)) return [];
+  return answers
+    .map((answer) => {
+      if (typeof answer === "string") return answer;
+      const key = typeof answer?.key === "string" ? answer.key : "";
+      const text = typeof answer?.text === "string" ? answer.text : "";
+      return key || text;
+    })
+    .filter((answer) => answer.trim().length > 0);
+}
+
 export default function TemplatesPage() {
   const { toast } = useToast();
   const { templates, isLoading: templatesLoading } = useTemplates();
@@ -220,8 +259,9 @@ export default function TemplatesPage() {
           <ScrollArea className="max-h-[65vh] pr-2">
             <div className="space-y-4 p-4 pr-4">
               {filteredTemplates.map((template) => {
-                const options = Array.isArray(template.options) ? template.options : [];
-                const correctAnswers = Array.isArray(template.correctAnswers) ? template.correctAnswers : [];
+                const options = normalizeTemplateOptions(template.options as TemplateOptionValue[] | undefined);
+                const correctAnswers = normalizeTemplateAnswers(template.correctAnswers as TemplateOptionValue[] | undefined);
+                const correctAnswerSet = new Set(correctAnswers);
                 const hasOptions = options.length > 0;
                 const showExpected = !hasOptions && correctAnswers.length > 0;
                 return (
@@ -282,7 +322,10 @@ export default function TemplatesPage() {
                         <p className="text-sm font-semibold text-gray-800">Options</p>
                         <ul className="grid gap-2 md:grid-cols-2">
                           {options.map((option, index) => {
-                            const isCorrect = correctAnswers.includes(option);
+                            const isCorrect =
+                              correctAnswerSet.has(option.value) ||
+                              correctAnswerSet.has(option.label) ||
+                              correctAnswerSet.has(option.key);
                             return (
                               <li
                                 key={`${template.id}-option-${index}`}
@@ -292,7 +335,7 @@ export default function TemplatesPage() {
                                   <span className="mr-2 font-semibold text-gray-900">
                                     {String.fromCharCode(65 + index)}.
                                   </span>
-                                  {option}
+                                  {option.label}
                                 </span>
                                 {isCorrect && (
                                   <Badge variant="outline" className="border-emerald-200 text-emerald-600">

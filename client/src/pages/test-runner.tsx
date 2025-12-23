@@ -29,7 +29,7 @@ type MappedQuestion = {
     skill: string;
     type: string;
     content: string;
-    options: string[];
+    options: Array<string | { key?: string; text: string }>;
     correctAnswers: string[];
     explanation: string | null;
     mediaUrl: string | null;
@@ -726,38 +726,36 @@ function QuestionAnswer({
   disabled,
 }: {
   type: string;
-  options: string[];
+  options: Array<string | { key?: string; text: string }>;
   onSave: (ans: any) => Promise<void>;
   initialValue?: any;
   saving: boolean;
   disabled: boolean;
 }) {
   const normalizedType = (type || "").toLowerCase();
-  const [value, setValue] = useState<string | string[]>(() => {
-    if (initialValue !== undefined && initialValue !== null) return initialValue;
-    return normalizedType === "mcq_multi" ? [] : "";
-  });
+  const normalizedOptions = useMemo(() => normalizeOptions(options), [options]);
+  const defaultValue = useMemo(
+    () => normalizeAnswerValue(initialValue, normalizedOptions, normalizedType),
+    [initialValue, normalizedOptions, normalizedType],
+  );
+  const [value, setValue] = useState<string | string[]>(defaultValue);
 
   useEffect(() => {
     // reset baseline when type changes
-    if (initialValue !== undefined) {
-      setValue(initialValue);
-    } else {
-      setValue(normalizedType === "mcq_multi" ? [] : "");
-    }
-  }, [normalizedType, initialValue]);
+    setValue(defaultValue);
+  }, [defaultValue]);
 
   if (normalizedType === "mcq_single") {
     const singleValue = typeof value === "string" ? value : "";
     return (
       <div className="space-y-3">
-        {options.map((opt, idx) => {
-          const selected = singleValue === opt;
+        {normalizedOptions.map((opt, idx) => {
+          const selected = singleValue === opt.value;
           return (
             <button
-              key={`${opt}-${idx}`}
+              key={opt.key}
               type="button"
-              onClick={() => !disabled && setValue(opt)}
+              onClick={() => !disabled && setValue(opt.value)}
               disabled={disabled}
               className={cn(
                 "w-full text-left border rounded-2xl p-4 transition-all bg-white",
@@ -771,7 +769,7 @@ function QuestionAnswer({
                   <span className="w-9 h-9 rounded-2xl border border-gray-200 bg-gray-50 text-gray-500 font-semibold flex items-center justify-center">
                     {String.fromCharCode(65 + idx)}
                   </span>
-                  <span className="font-medium text-gray-900">{opt}</span>
+                  <span className="font-medium text-gray-900">{opt.label}</span>
                 </div>
                 {selected && <CheckCircle2 className="w-5 h-5 text-primary" />}
               </div>
@@ -807,13 +805,13 @@ function QuestionAnswer({
 
     return (
       <div className="space-y-3">
-        {options.map((opt, idx) => {
-          const selected = multiValue.includes(opt);
+        {normalizedOptions.map((opt, idx) => {
+          const selected = multiValue.includes(opt.value);
           return (
             <button
-              key={`${opt}-${idx}`}
+              key={opt.key}
               type="button"
-              onClick={() => toggle(opt)}
+              onClick={() => toggle(opt.value)}
               disabled={disabled}
               className={cn(
                 "w-full text-left border rounded-2xl p-4 transition-all bg-white",
@@ -834,7 +832,7 @@ function QuestionAnswer({
                   >
                     {String.fromCharCode(65 + idx)}
                   </span>
-                  <span className="font-medium text-gray-900">{opt}</span>
+                  <span className="font-medium text-gray-900">{opt.label}</span>
                 </div>
                 {selected && <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
               </div>
@@ -909,4 +907,49 @@ function formatQuestionType(type: string) {
   if (!type) return "Question";
   const cleaned = type.replace(/[_-]/g, " ");
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+type NormalizedOption = { value: string; label: string; key: string };
+
+function normalizeOptions(options: Array<string | { key?: string; text: string }>): NormalizedOption[] {
+  return options.map((option, index) => {
+    if (typeof option === "string") {
+      return { value: option, label: option, key: option || `option-${index}` };
+    }
+    const label = option.text ?? "";
+    const value = option.key ?? label;
+    const key = (option.key ?? label) || `option-${index}`;
+    return { value, label, key };
+  });
+}
+
+function normalizeAnswerValue(
+  raw: unknown,
+  options: NormalizedOption[],
+  normalizedType: string,
+): string | string[] {
+  if (normalizedType === "mcq_multi") {
+    const rawValues = Array.isArray(raw) ? raw : raw != null ? [raw] : [];
+    const normalized = rawValues
+      .map((item) => normalizeSingleAnswer(item, options))
+      .filter((item) => item.length > 0);
+    return Array.from(new Set(normalized));
+  }
+  if (raw == null) return "";
+  return normalizeSingleAnswer(raw, options);
+}
+
+function normalizeSingleAnswer(raw: unknown, options: NormalizedOption[]): string {
+  if (raw == null) return "";
+  if (typeof raw === "object") {
+    const maybeKey = "key" in raw ? String((raw as { key?: unknown }).key ?? "") : "";
+    const maybeText = "text" in raw ? String((raw as { text?: unknown }).text ?? "") : "";
+    const candidate = maybeKey || maybeText;
+    if (!candidate) return "";
+    const match = options.find((opt) => opt.value === candidate || opt.label === candidate);
+    return match ? match.value : candidate;
+  }
+  const candidate = String(raw);
+  const match = options.find((opt) => opt.value === candidate || opt.label === candidate);
+  return match ? match.value : candidate;
 }

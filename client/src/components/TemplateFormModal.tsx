@@ -43,6 +43,20 @@ type TemplateFormModalProps = {
   submitting?: boolean;
 };
 
+type TemplateListValue = string | { key?: string; text?: string };
+
+function normalizeTemplateList(values?: TemplateListValue[] | null): string[] {
+  if (!Array.isArray(values)) return [];
+  return values
+    .map((value) => {
+      if (typeof value === "string") return value;
+      const key = typeof value?.key === "string" ? value.key : "";
+      const text = typeof value?.text === "string" ? value.text : "";
+      return key || text;
+    })
+    .filter((value) => value.trim().length > 0);
+}
+
 export function TemplateFormModal({
   open,
   onOpenChange,
@@ -74,9 +88,9 @@ export function TemplateFormModal({
         skills: template.skills,
         types: template.types,
         content: template.content,
-        options: template.options ?? [],
-        correctAnswers: template.correctAnswers ?? [],
-        tags: template.tags ?? [],
+        options: normalizeTemplateList(template.options as TemplateListValue[] | undefined),
+        correctAnswers: normalizeTemplateList(template.correctAnswers as TemplateListValue[] | undefined),
+        tags: normalizeTemplateList(template.tags as TemplateListValue[] | undefined),
       });
     } else if (!template && open) {
       form.reset({
