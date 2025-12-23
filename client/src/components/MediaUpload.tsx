@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { File, FileText } from "lucide-react";
 
 type MediaUploadResult = {
   id?: string;
@@ -63,11 +64,20 @@ export function MediaUploadButton({
 
   const fileKind = useMemo(() => {
     if (!file) return "file";
+    const name = file.name.toLowerCase();
+    if (file.type === "application/pdf" || name.endsWith(".pdf")) return "pdf";
     if (file.type.startsWith("image")) return "image";
     if (file.type.startsWith("audio")) return "audio";
     if (file.type.startsWith("video")) return "video";
     return "file";
   }, [file]);
+  const fileExtension = useMemo(() => {
+    if (!file?.name) return null;
+    const parts = file.name.split(".");
+    if (parts.length < 2) return null;
+    const ext = parts.pop() || "";
+    return ext ? ext.toUpperCase() : null;
+  }, [file?.name]);
 
   async function handleUpload() {
     if (!file) return;
@@ -153,9 +163,21 @@ export function MediaUploadButton({
                     Your browser does not support the video element.
                   </video>
                 )}
-                {previewUrl && fileKind === "file" && (
-                  <div className="mt-3 rounded-lg border border-dashed border-gray-200 px-3 py-6 text-center text-xs text-gray-500">
-                    Preview not available for this file type.
+                {previewUrl && (fileKind === "file" || fileKind === "pdf") && (
+                  <div className="mt-3 flex items-center gap-3 rounded-lg border border-dashed border-gray-200 px-3 py-4 text-left text-xs text-gray-500">
+                    {fileKind === "pdf" ? (
+                      <FileText className="h-6 w-6 text-rose-500" />
+                    ) : (
+                      <File className="h-6 w-6 text-gray-400" />
+                    )}
+                    <div>
+                      <div className="text-sm font-semibold text-gray-700">
+                        {fileKind === "pdf" ? "PDF document" : "File upload"}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {fileExtension ? `${fileExtension} file` : "Preview not available"}
+                      </div>
+                    </div>
                   </div>
                 )}
               </Card>

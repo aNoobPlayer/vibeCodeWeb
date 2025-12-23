@@ -1,10 +1,11 @@
-import { useMemo, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ToastAction } from "@/components/ui/toast";
 import {
   Dialog,
@@ -39,9 +40,16 @@ type CourseApplication = {
   courseId: string;
   userId: string;
   username: string;
+  avatar?: string | null;
   status: string;
   role: string;
   joinedAt: string | Date;
+};
+type AdminUser = {
+  id: string;
+  username: string;
+  role: string;
+  isActive?: boolean;
 };
 
 export default function CoursesPage() {
@@ -52,6 +60,7 @@ export default function CoursesPage() {
   const [draggingLessonId, setDraggingLessonId] = useState<string | null>(null);
   const [draggingLevel, setDraggingLevel] = useState<number | null>(null);
   const [hoveredLessonId, setHoveredLessonId] = useState<string | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState<string>("");
   const testRequiredForReady = false;
   const [formState, setFormState] = useState({
     name: "",
@@ -63,6 +72,11 @@ export default function CoursesPage() {
 
   const { data: courses, isLoading } = useQuery<AdminCourse[]>({
     queryKey: ["/api/admin/courses"],
+  });
+
+  const { data: users = [] } = useQuery<AdminUser[]>({
+    queryKey: ["/api/admin/users"],
+    enabled: Boolean(selectedCourse?.id),
   });
 
   const curriculumCourse =
@@ -149,6 +163,36 @@ export default function CoursesPage() {
     },
     enabled: Boolean(selectedCourse?.id),
   });
+
+  const pendingMembers = useMemo(
+    () => (applications ?? []).filter((member) => member.status === "pending"),
+    [applications],
+  );
+  const approvedMembers = useMemo(
+    () => (applications ?? []).filter((member) => member.status === "approved"),
+    [applications],
+  );
+  const memberUserIds = useMemo(
+    () => new Set((applications ?? []).map((member) => member.userId)),
+    [applications],
+  );
+  const availableStudents = useMemo(
+    () =>
+      users
+        .filter((user) => user.role === "student" && user.isActive !== false)
+        .filter((user) => !memberUserIds.has(user.id)),
+    [users, memberUserIds],
+  );
+
+  useEffect(() => {
+    if (!selectedCourse?.id) {
+      setSelectedStudentId("");
+      return;
+    }
+    if (selectedStudentId && !availableStudents.some((user) => user.id === selectedStudentId)) {
+      setSelectedStudentId("");
+    }
+  }, [availableStudents, selectedCourse?.id, selectedStudentId]);
 
   const sortedCourses = useMemo(() => courses ?? [], [courses]);
 
@@ -425,6 +469,32 @@ export default function CoursesPage() {
     },
   });
 
+  const addMemberMutation = useMutation({
+    mutationFn: async ({ courseId, userId }: { courseId: string; userId: string }) => {
+      return apiRequest(`/api/admin/courses/${courseId}/members`, "POST", {
+        userId,
+        status: "approved",
+      });
+    },
+    onSuccess: () => {
+      if (selectedCourse?.id) {
+        queryClient.invalidateQueries({
+          queryKey: ["/api/admin/courses", selectedCourse.id, "applications"],
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/courses"] });
+      setSelectedStudentId("");
+      toast({ title: "Student added", description: "Student is now enrolled in this class." });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Unable to add student",
+        description: error?.message ?? "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCreateCourse = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!formState.name.trim() || !formState.code.trim()) {
@@ -495,6 +565,9 @@ export default function CoursesPage() {
                   <SelectItem value="closed">Closed</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="mt-1 text-xs text-gray-500">
+                Closed classes are only visible to enrolled students.
+              </p>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700">Pass threshold (%)</label>
@@ -920,51 +993,144 @@ export default function CoursesPage() {
             </DialogDescription>
           </DialogHeader>
           {loadingApplications ? (
-            <p className="text-sm text-gray-500">Loading applications...</p>
-          ) : applications && applications.length > 0 ? (
-            <div className="space-y-3">
-              {applications.map((member) => (
-                <div
-                  key={member.id}
-                  className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
-                >
-                  <div>
-                    <p className="font-semibold text-gray-900">{member.username}</p>
-                    <p className="text-xs text-gray-500">
-                      Applied {new Date(member.joinedAt).toLocaleDateString("vi-VN")}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className={applicationStatusBadge(member.status)}>
-                      {member.status}
-                    </Badge>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={member.status === "approved"}
-                      onClick={() =>
-                        updateMemberStatusMutation.mutate({ id: member.id, status: "approved" })
-                      }
-                    >
-                      Approve
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-rose-600"
-                      disabled={member.status === "rejected"}
-                      onClick={() =>
-                        updateMemberStatusMutation.mutate({ id: member.id, status: "rejected" })
-                      }
-                    >
-                      Reject
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <p className="text-sm text-gray-500">Loading class roster...</p>
           ) : (
-            <p className="text-sm text-gray-500">No applications yet.</p>
+            <div className="space-y-5">
+              <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-4">
+                <p className="text-sm font-semibold text-gray-900">Add student to class</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  Approved students will see this class immediately.
+                </p>
+                {availableStudents.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Select
+                      value={selectedStudentId || "none"}
+                      onValueChange={(value) => setSelectedStudentId(value === "none" ? "" : value)}
+                    >
+                      <SelectTrigger className="w-64">
+                        <SelectValue placeholder="Select student" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Select student</SelectItem>
+                        {availableStudents.map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.username}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      disabled={!selectedStudentId || addMemberMutation.isPending}
+                      onClick={() => {
+                        if (!selectedCourse?.id || !selectedStudentId) return;
+                        addMemberMutation.mutate({
+                          courseId: selectedCourse.id,
+                          userId: selectedStudentId,
+                        });
+                      }}
+                    >
+                      {addMemberMutation.isPending ? "Adding..." : "Add to class"}
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-xs text-gray-500">
+                    All students are already assigned to this class.
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Pending applications
+                </p>
+                {pendingMembers.length > 0 ? (
+                  pendingMembers.map((member) => (
+                    <div
+                      key={member.id}
+                      className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage src={member.avatar ?? ""} alt={member.username} />
+                          <AvatarFallback>
+                            {member.username?.charAt(0).toUpperCase() || "S"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-semibold text-gray-900">{member.username}</p>
+                          <p className="text-xs text-gray-500">
+                            Applied {new Date(member.joinedAt).toLocaleDateString("vi-VN")}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className={applicationStatusBadge(member.status)}>
+                          {member.status}
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={member.status === "approved"}
+                          onClick={() =>
+                            updateMemberStatusMutation.mutate({ id: member.id, status: "approved" })
+                          }
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-rose-600"
+                          disabled={member.status === "rejected"}
+                          onClick={() =>
+                            updateMemberStatusMutation.mutate({ id: member.id, status: "rejected" })
+                          }
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500">No pending applications.</p>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Class roster
+                </p>
+                {approvedMembers.length > 0 ? (
+                  approvedMembers.map((member) => (
+                    <div
+                      key={member.id}
+                      className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white px-4 py-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage src={member.avatar ?? ""} alt={member.username} />
+                          <AvatarFallback>
+                            {member.username?.charAt(0).toUpperCase() || "S"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-semibold text-gray-900">{member.username}</p>
+                          <p className="text-xs text-gray-500">
+                            Joined {new Date(member.joinedAt).toLocaleDateString("vi-VN")}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge variant="secondary" className="bg-emerald-100 text-emerald-700">
+                        Approved
+                      </Badge>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500">No students in this class yet.</p>
+                )}
+              </div>
+            </div>
           )}
         </DialogContent>
       </Dialog>

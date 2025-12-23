@@ -1298,6 +1298,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/admin/courses/:id/members", requireAdmin, async (req, res) => {
+    try {
+      const parsed = z
+        .object({
+          userId: z.union([z.string(), z.number()]),
+          status: courseMemberStatusSchema.optional(),
+        })
+        .safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return res.status(400).json({ error: fromZodError(parsed.error).message });
+      }
+      const status = parsed.data.status ?? "approved";
+      const courseId = req.params.id;
+      const userIdRaw = parsed.data.userId;
+      const userId = typeof userIdRaw === "string" ? userIdRaw : String(userIdRaw);
+
+      if (process.env.DATABASE_URL) {
+        const classId = parseInt(courseId, 10);
+        const userNum = parseInt(userId, 10);
+        const existing = await query(
+          `SELECT TOP 1 id FROM dbo.aptis_class_members WHERE classId = @p0 AND userId = @p1`,
+          [classId, userNum],
+        );
+        const row = existing.recordset?.[0];
+        if (row) {
+          await query(`UPDATE dbo.aptis_class_members SET [status] = @p0 WHERE id = @p1`, [status, row.id]);
+          return res.json({
+            id: String(row.id),
+            courseId: String(classId),
+            userId: String(userNum),
+            role: "student",
+            status,
+          });
+        }
+        const insert = await query(
+          `INSERT INTO dbo.aptis_class_members(classId, userId, roleInClass, [status])
+           OUTPUT INSERTED.id
+           VALUES(@p0, @p1, @p2, @p3)`,
+          [classId, userNum, "student", status],
+        );
+        const memberId = insert.recordset?.[0]?.id;
+        return res.status(201).json({
+          id: String(memberId),
+          courseId: String(classId),
+          userId: String(userNum),
+          role: "student",
+          status,
+        });
+      }
+
+      const created = await storage.applyToCourse(courseId, userId);
+      const updated =
+        created.status === status
+          ? created
+          : (await storage.updateCourseMemberStatus(created.id, status)) ?? created;
+      res.status(201).json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.patch("/api/admin/course-members/:id", requireAdmin, async (req, res) => {
     try {
       const parsed = z.object({ status: courseMemberStatusSchema }).safeParse(req.body);

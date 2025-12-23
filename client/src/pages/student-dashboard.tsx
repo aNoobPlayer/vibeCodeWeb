@@ -567,6 +567,9 @@ function CoursesPage({
   });
 
   const filteredCourses = (courses ?? []).filter((course) => {
+    const status = course.status ?? "open";
+    const enrollmentStatus = course.enrollmentStatus ?? "none";
+    if (status === "closed" && enrollmentStatus !== "approved") return false;
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
